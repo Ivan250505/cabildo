@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EtnoSIG — Mockups</title>
+<style>
+/* ─── Variables ─────────────────────────────────────── */
+:root {
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #94a3b8;
+  --sidebar-active-bg: #1e3a5f;
+  --sidebar-active-text: #60a5fa;
+  --sidebar-hover: #1e293b;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #eff6ff;
+  --bg: #f1f5f9;
+  --card: #ffffff;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
+  --warning: #d97706;
+  --warning-bg: #fffbeb;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --info: #0891b2;
+  --info-bg: #ecfeff;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+}
+
+/* ─── Reset ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+a { text-decoration: none; color: inherit; }
+ul { list-style: none; }
+input, select, textarea, button { font-family: inherit; font-size: inherit; }
+
+/* ─── Layout ─────────────────────────────────────────── */
+.app { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 230px; min-height: 100vh; background: var(--sidebar-bg);
+  display: flex; flex-direction: column; flex-shrink: 0; position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto;
+}
+.main { margin-left: 230px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+.topbar {
+  height: 56px; background: var(--card); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 24px; gap: 12px;
+  position: sticky; top: 0; z-index: 10; box-shadow: var(--shadow);
+}
+.content { padding: 24px; flex: 1; }
+.hidden { display: none !important; }
+
+/* ─── Sidebar ─────────────────────────────────────────── */
+.sidebar-logo {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid #1e293b;
+}
+.sidebar-logo .brand { font-size: 18px; font-weight: 700; color: #f1f5f9; letter-spacing: -.3px; }
+.sidebar-logo .brand span { color: #3b82f6; }
+.sidebar-logo .tagline { font-size: 10px; color: #475569; margin-top: 3px; text-transform: uppercase; letter-spacing: .5px; }
+
+.nav-section { padding: 12px 0 4px; }
+.nav-label { font-size: 10px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: .8px; padding: 0 18px 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px; cursor: pointer; color: var(--sidebar-text);
+  transition: background .15s, color .15s; border-radius: 0;
+  font-size: 13.5px;
+}
+.nav-item:hover { background: var(--sidebar-hover); color: #e2e8f0; }
+.nav-item.active { background: var(--sidebar-active-bg); color: var(--sidebar-active-text); font-weight: 500; }
+.nav-item .icon { width: 18px; text-align: center; font-size: 15px; opacity: .85; }
+.nav-sub { padding-left: 44px; font-size: 13px; }
+.nav-sub .nav-item { padding: 7px 12px; border-radius: 4px; }
+
+.sidebar-footer {
+  margin-top: auto; padding: 14px 18px;
+  border-top: 1px solid #1e293b; color: #475569; font-size: 12px;
+}
+.sidebar-user { display: flex; align-items: center; gap: 10px; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%; background: #1e3a5f;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: #60a5fa; flex-shrink: 0;
+}
+
+/* ─── Breadcrumb / Topbar ──────────────────────────── */
+.breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); flex: 1; }
+.breadcrumb .sep { color: var(--border); }
+.breadcrumb .current { color: var(--text); font-weight: 500; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ─── Typography ─────────────────────────────────────── */
+.page-title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.page-sub { font-size: 13px; color: var(--text-muted); }
+.section-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+
+/* ─── Cards ──────────────────────────────────────────── */
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-body { padding: 20px; }
+.card-footer { padding: 14px 20px; border-top: 1px solid var(--border); background: #f8fafc; border-radius: 0 0 var(--radius) var(--radius); }
+
+/* ─── Stat cards ─────────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+.stat-label { font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 8px; }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+.stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+.stat-icon { font-size: 22px; float: right; margin-top: -4px; }
+
+/* ─── Study cards grid ───────────────────────────────── */
+.studies-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.study-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow);
+  cursor: pointer; transition: border-color .15s, box-shadow .15s;
+}
+.study-card:hover { border-color: var(--primary); box-shadow: var(--shadow-md); }
+.study-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.study-name { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.study-location { font-size: 12px; color: var(--text-muted); }
+.study-meta { display: flex; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.study-meta-item { font-size: 11px; color: var(--text-muted); }
+.study-meta-item strong { color: var(--text); display: block; font-size: 13px; }
+.progress-bar-wrap { height: 5px; background: #e2e8f0; border-radius: 99px; margin-top: 12px; overflow: hidden; }
+.progress-bar { height: 100%; border-radius: 99px; background: var(--primary); }
+
+/* ─── Badges ─────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 600;
+}
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+.badge-success { background: var(--success-bg); color: var(--success); }
+.badge-success .badge-dot { background: var(--success); }
+.badge-warning { background: var(--warning-bg); color: var(--warning); }
+.badge-warning .badge-dot { background: var(--warning); }
+.badge-danger { background: var(--danger-bg); color: var(--danger); }
+.badge-danger .badge-dot { background: var(--danger); }
+.badge-info { background: var(--info-bg); color: var(--info); }
+.badge-info .badge-dot { background: var(--info); }
+.badge-neutral { background: #f1f5f9; color: #64748b; }
+.badge-neutral .badge-dot { background: #94a3b8; }
+
+/* ─── Buttons ─────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 16px; border-radius: var(--radius); font-weight: 500;
+  cursor: pointer; border: none; transition: background .15s, opacity .15s; white-space: nowrap;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--bg); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-ghost { background: transparent; color: var(--text-muted); border: none; }
+.btn-ghost:hover { background: var(--bg); }
+.btn-sm { padding: 5px 11px; font-size: 12px; }
+.btn-lg { padding: 11px 22px; font-size: 15px; }
+.btn-full { width: 100%; justify-content: center; }
+
+/* ─── Forms ──────────────────────────────────────────── */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 12.5px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+.form-input {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); outline: none; transition: border-color .15s;
+  background: var(--card);
+}
+.form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.form-select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.checkbox-group { display: flex; flex-direction: column; gap: 8px; }
+.checkbox-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.checkbox-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--primary); }
+.checkbox-item label { cursor: pointer; font-size: 13px; }
+
+/* ─── Tables ─────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted); border-bottom: 2px solid var(--border); background: #f8fafc; }
+tbody td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #f8fafc; }
+
+/* ─── File tree ─────────────────────────────────────── */
+.file-tree { font-size: 13px; }
+.file-folder { margin-bottom: 10px; }
+.file-folder-name {
+  display: flex; align-items: center; gap: 7px; font-weight: 600;
+  color: var(--text); padding: 6px 8px; border-radius: 5px; cursor: pointer;
+}
+.file-folder-name:hover { background: var(--bg); }
+.file-list { padding-left: 24px; margin-top: 4px; }
+.file-item { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-radius: 5px; color: var(--text-muted); }
+.file-item:hover { background: var(--bg); color: var(--text); }
+.file-item .file-left { display: flex; align-items: center; gap: 7px; }
+.file-check { color: var(--success); font-size: 13px; }
+.file-warn { color: var(--warning); font-size: 13px; }
+
+/* ─── Tabs ───────────────────────────────────────────── */
+.tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+.tab { padding: 9px 16px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* ─── Progress steps ────────────────────────────────── */
+.steps { display: flex; flex-direction: column; gap: 0; }
+.step { display: flex; align-items: flex-start; gap: 14px; padding: 12px 0; position: relative; }
+.step:not(:last-child)::after { content: ''; position: absolute; left: 15px; top: 40px; bottom: 0; width: 2px; background: var(--border); }
+.step.done::after { background: var(--success); }
+.step.active::after { background: linear-gradient(var(--success), var(--border)); }
+.step-icon {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+  background: var(--bg); border: 2px solid var(--border); color: var(--text-muted); z-index: 1;
+}
+.step.done .step-icon { background: var(--success); border-color: var(--success); color: #fff; }
+.step.active .step-icon { background: var(--primary); border-color: var(--primary); color: #fff; animation: pulse 1.5s infinite; }
+.step.pending .step-icon { background: var(--bg); }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,.4); } 50% { box-shadow: 0 0 0 6px rgba(37,99,235,0); } }
+.step-content { padding-top: 4px; }
+.step-name { font-weight: 500; font-size: 13.5px; color: var(--text); }
+.step.pending .step-name { color: var(--text-muted); }
+.step-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+/* ─── Alert box ─────────────────────────────────────── */
+.alert { padding: 11px 14px; border-radius: var(--radius); font-size: 13px; display: flex; align-items: flex-start; gap: 9px; margin-bottom: 12px; }
+.alert-warning { background: var(--warning-bg); color: #92400e; border: 1px solid #fde68a; }
+.alert-success { background: var(--success-bg); color: #14532d; border: 1px solid #bbf7d0; }
+.alert-info { background: var(--info-bg); color: #164e63; border: 1px solid #a5f3fc; }
+
+/* ─── Corpus validation ──────────────────────────────── */
+.corpus-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: var(--radius); margin-bottom: 8px; border: 1px solid var(--border); background: var(--card); }
+.corpus-item.ok { border-color: #bbf7d0; background: var(--success-bg); }
+.corpus-item.warn { border-color: #fde68a; background: var(--warning-bg); }
+.corpus-label { font-size: 13px; font-weight: 500; }
+.corpus-count { font-size: 12px; color: var(--text-muted); }
+
+/* ─── Two column layouts ─────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.col-left-sm { display: grid; grid-template-columns: 260px 1fr; gap: 20px; }
+.col-right-sm { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+
+/* ─── Report preview ─────────────────────────────────── */
+.report-toc { font-size: 13px; }
+.toc-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; border-radius: 5px; cursor: pointer; color: var(--text-muted); gap: 6px; }
+.toc-item:hover { background: var(--bg); color: var(--text); }
+.toc-item.active { background: var(--primary-light); color: var(--primary); font-weight: 500; }
+.toc-item.warn { color: var(--warning); }
+.toc-section { font-weight: 600; color: var(--text); margin-top: 8px; padding: 4px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+.toc-sub { padding-left: 22px; font-size: 12.5px; }
+
+.doc-preview { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 32px; min-height: 500px; font-size: 13.5px; line-height: 1.7; }
+.doc-h1 { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 6px; color: var(--text); }
+.doc-h2 { font-size: 14px; font-weight: 600; margin: 18px 0 10px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+.doc-p { color: #374151; margin-bottom: 10px; }
+.doc-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12.5px; }
+.doc-table th { background: #f1f5f9; padding: 7px 12px; text-align: left; font-weight: 600; border: 1px solid var(--border); }
+.doc-table td { padding: 7px 12px; border: 1px solid var(--border); }
+.doc-table tr.discrepancy { background: #fef2f2; }
+.highlight-warn { background: #fef9c3; padding: 2px 5px; border-radius: 3px; font-weight: 600; }
+
+/* ─── Login page ─────────────────────────────────────── */
+.login-wrap { min-height: 100vh; background: var(--sidebar-bg); display: flex; align-items: center; justify-content: center; }
+.login-card { background: var(--card); border-radius: 12px; padding: 40px; width: 380px; box-shadow: 0 20px 40px rgba(0,0,0,.3); }
+.login-logo { text-align: center; margin-bottom: 28px; }
+.login-logo .brand { font-size: 28px; font-weight: 800; color: var(--text); }
+.login-logo .brand span { color: var(--primary); }
+.login-logo .tagline { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.login-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; text-align: center; color: var(--text); }
+.login-footer { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 24px; line-height: 1.6; }
+
+/* ─── Dividers / misc ────────────────────────────────── */
+.divider { height: 1px; background: var(--border); margin: 20px 0; }
+.text-muted { color: var(--text-muted); }
+.text-sm { font-size: 12px; }
+.mt-4 { margin-top: 16px; }
+.mt-6 { margin-top: 24px; }
+.mb-4 { margin-bottom: 16px; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.w-full { width: 100%; }
+
+/* ─── Mockup nav bar ─────────────────────────────────── */
+.mockup-nav {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: #0f172a; color: #fff; border-radius: 99px;
+  padding: 8px 16px; display: flex; gap: 4px; z-index: 999;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4); font-size: 12px;
+}
+.mockup-nav button {
+  background: transparent; color: #94a3b8; border: none; cursor: pointer;
+  padding: 5px 12px; border-radius: 99px; font-size: 12px; transition: all .15s;
+}
+.mockup-nav button:hover { background: #1e293b; color: #fff; }
+.mockup-nav button.active { background: #2563eb; color: #fff; }
+.mockup-label {
+  font-size: 11px; color: #475569; display: flex; align-items: center;
+  padding: 0 10px; border-right: 1px solid #1e293b; margin-right: 4px;
+}
+
+/* ─── Network diagram (actors) ───────────────────────── */
+.actor-diagram { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; min-height: 220px; position: relative; }
+.actor-node {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 80px; height: 80px; border-radius: 50%; font-size: 11px; font-weight: 600;
+  text-align: center; line-height: 1.3;
+}
+.actor-center { background: #1e3a5f; color: #fff; width: 90px; height: 90px; font-size: 12px; }
+.actor-secondary { background: var(--primary-light); color: var(--primary); border: 2px solid #bfdbfe; }
+.actors-row { display: flex; gap: 16px; justify-content: center; align-items: center; }
+
+/* ─── Timeline ───────────────────────────────────────── */
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.tl-item { position: relative; margin-bottom: 16px; }
+.tl-dot { position: absolute; left: -20px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--primary); }
+.tl-date { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+.tl-text { font-size: 13px; color: var(--text); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
+/* progress bar mini anim */
+.progress-bar.animated { animation: grow 2s ease-in-out; }
+@keyframes grow { from { width: 0; } }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     SCREEN 1 — LOGIN
+═══════════════════════════════════════════════════════ -->
+<div id="screen-login" class="screen">
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="brand">Etno<span>SIG</span></div>
+      <div class="tagline">Plataforma de Análisis Etnográfico</div>
+    </div>
+    <div class="login-title">Iniciar sesión</div>
+    <div class="form-group">
+      <label class="form-label">Correo electrónico</label>
+      <input class="form-input" type="email" placeholder="usuario@entidad.gov.co" value="m.lopez@cliente.gov.co">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña</label>
+      <input class="form-input" type="password" value="••••••••••">
+    </div>
+    <button class="btn btn-primary btn-full btn-lg" onclick="goTo('dashboard')" style="margin-top:8px">
+      Ingresar →
+    </button>
+    <div class="login-footer">
+      Acceso restringido al personal autorizado<br>
+      Ministerio del Interior · Protocolo Etnológico<br>
+      <span style="color:#94a3b8">Simonky S.A.S. — Plataforma administrada</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     APP SHELL (sidebar + topbar) — screens 2..N
+═══════════════════════════════════════════════════════ -->
+<div id="app-shell" class="hidden">
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="brand">Etno<span>SIG</span></div>
+    <div class="tagline">Plataforma de análisis etnográfico</div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Principal</div>
+    <div class="nav-item" id="nav-dashboard" onclick="goTo('dashboard')">
+      <span class="icon">⊞</span> Dashboard
+    </div>
+    <div class="nav-item" id="nav-estudios" onclick="goTo('estudios')">
+      <span class="icon">📂</span> Estudios
+    </div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Estudio activo</div>
+    <div style="padding: 6px 18px 4px; font-size:12px; color:#3b82f6; font-weight:500;">📍 Murui Muina</div>
+    <div class="nav-sub">
+      <div class="nav-item" id="nav-detalle" onclick="goTo('detalle')">
+        <span class="icon">🗂</span> Vista general
+      </div>
+      <div class="nav-item" id="nav-generar" onclick="goTo('generar')">
+        <span class="icon">⚡</span> Generar informe
+      </div>
+      <div class="nav-item" id="nav-revision" onclick="goTo('revision')">
+        <span class="icon">📝</span> Revisar informe
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Administración</div>
+    <div class="nav-item" id="nav-usuarios" onclick="goTo('usuarios')">
+      <span class="icon">👥</span> Usuarios
+    </div>
+    <div class="nav-item" id="nav-config" onclick="goTo('config')">
+      <span class="icon">⚙</span> Configuración
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="avatar">ML</div>
+      <div>
+        <div style="color:#e2e8f0;font-size:12.5px;font-weight:500;">M. F. López</div>
+        <div style="font-size:11px;color:#475569;">Responsable Técnico</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="breadcrumb" id="breadcrumb-text">
+    <span>EtnoSIG</span><span class="sep">›</span><span class="current">Dashboard</span>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn btn-outline btn-sm">🔔 <span style="background:#dc2626;color:#fff;border-radius:99px;padding:0 5px;font-size:10px;margin-left:2px;">2</span></button>
+    <button class="btn btn-ghost btn-sm" onclick="goTo('login')">⏻ Salir</button>
+  </div>
+</div>
+
+<!-- ════════ CONTENT AREA ════════ -->
+<div class="content">
+
+<!-- ─────────────────────────────────────────────────────
+     SCREEN 2 — DASHBOARD
+──────────────────────────────────────────────────────── -->
+<div id="screen-dashboard" class="screen-content hidden">
+  <div style="margin-bottom:20px;">
+    <div class="page-title">Dashboard</div>
+    <div class="page-sub">Resumen operativo · Mayo 2026</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Estudios activos <span class="stat-icon">📂</span></div>
+      <div class="stat-value">3</div>
+      <div class="stat-sub">2 en procesamiento</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Informes generados <span class="stat-icon">📄</span></div>
+      <div class="stat-value">12</div>
+      <div class="stat-sub">Total acumulado</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pendientes revisión <span class="stat-icon">⏳</span></div>
+      <div class="stat-value" style="color:var(--warning)">2</div>
+      <div class="stat-sub">Requieren aprobación</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Aprobados este mes <span class="stat-icon">✅</span></div>
+      <div class="stat-value" style="color:var(--success)">1</div>
+      <div class="stat-sub">Zenú del Caribaná</div>
+    </div>
+  </div>
+
+  <div class="flex justify-between items-center mb-4">
+    <div class="section-title" style="margin:0">Estudios en curso</div>
+    <button class="btn btn-primary btn-sm" onclick="goTo('estudios')">Ver todos</button>
+  </div>
+
+  <div class="studies-grid">
+    <!-- Card 1 -->
+    <div class="study-card" onclick="goTo('detalle')">
+      <div class="study-card-header">
+        <div>
+          <div class="study-name">Cabildo Indígena Murui Muina</div>
+          <div class="study-location">📍 Florencia, Caquetá</div>
+        </div>
+        <span class="badge badge-warning"><span class="badge-dot"></span>En revisión</span>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar" style="width:85%"></div></div>
+      <div class="study-meta">
+        <div class="study-meta-item"><strong>62</strong>Archivos corpus</div>
+        <div class="study-meta-item"><strong>4</strong>Capas SIG</div>
+        <div class="study-meta-item"><strong>hace 2 h</strong>Última actividad</div>
+      </div>
+    </div>
+    <!-- Card 2 -->
+    <div class="study-card">
+      <div class="study-card-header">
+        <div>
+          <div class="study-name">Comunidad Zenú del Caribaná</div>
+          <div class="study-location">📍 Montería, Córdoba</div>
+        </div>
+        <span class="badge badge-info"><span class="badge-dot"></span>Informe generado</span>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar" style="width:70%;background:var(--info)"></div></div>
+      <div class="study-meta">
+        <div class="study-meta-item"><strong>58</strong>Archivos corpus</div>
+        <div class="study-meta-item"><strong>4</strong>Capas SIG</div>
+        <div class="study-meta-item"><strong>hace 1 d</strong>Última actividad</div>
+      </div>
+    </div>
+    <!-- Card 3 -->
+    <div class="study-card">
+      <div class="study-card-header">
+        <div>
+          <div class="study-name">Resguardo Embera Chamí</div>
+          <div class="study-location">📍 Belén de Umbría, Risaralda</div>
+        </div>
+        <span class="badge badge-neutral"><span class="badge-dot"></span>Datos cargados</span>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar" style="width:40%;background:#94a3b8"></div></div>
+      <div class="study-meta">
+        <div class="study-meta-item"><strong>31</strong>Archivos corpus</div>
+        <div class="study-meta-item"><strong>4</strong>Capas SIG</div>
+        <div class="study-meta-item"><strong>hace 3 d</strong>Última actividad</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-6">
+    <div class="section-title">Actividad reciente</div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Evento</th><th>Estudio</th><th>Usuario</th><th>Fecha</th></tr></thead>
+        <tbody>
+          <tr><td>📝 Informe enviado a revisión</td><td>Murui Muina</td><td>M. F. López</td><td>Hoy 10:23 a.m.</td></tr>
+          <tr><td>⚡ Informe generado</td><td>Murui Muina</td><td>Sistema</td><td>Hoy 10:08 a.m.</td></tr>
+          <tr><td>🔄 Corpus sincronizado</td><td>Embera Chamí</td><td>C. Ruiz</td><td>Ayer 4:45 p.m.</td></tr>
+          <tr><td>✅ Informe aprobado</td><td>Zenú del Caribaná</td><td>M. F. López</td><td>May 10, 2:30 p.m.</td></tr>
+          <tr><td>👤 Usuario creado</td><td>—</td><td>Admin Simonky</td><td>May 09, 9:00 a.m.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────
+     SCREEN 3 — LISTA DE ESTUDIOS
+──────────────────────────────────────────────────────── -->
+<div id="screen-estudios" class="screen-content hidden">
+  <div class="flex justify-between items-center mb-4">
+    <div>
+      <div class="page-title">Estudios etnológicos</div>
+      <div class="page-sub">3 estudios registrados</div>
+    </div>
+    <button class="btn btn-primary">＋ Nuevo estudio</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="flex gap-2 items-center">
+        <input class="form-input" placeholder="🔍  Buscar comunidad..." style="width:240px">
+        <select class="form-select" style="width:160px">
+          <option>Todos los estados</option>
+          <option>En revisión</option>
+          <option>Informe generado</option>
+          <option>Datos cargados</option>
+          <option>Aprobado</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Comunidad</th><th>Municipio / Depto.</th><th>Archivos</th><th>Estado</th><th>Último informe</th><th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Cabildo Indígena Murui Muina</strong><br><span class="text-muted text-sm">Etnia: Murui-Muina (Uitoto)</span></td>
+            <td>Florencia, Caquetá</td>
+            <td>62</td>
+            <td><span class="badge badge-warning"><span class="badge-dot"></span>En revisión</span></td>
+            <td>Hoy 10:08 a.m.</td>
+            <td>
+              <button class="btn btn-outline btn-sm" onclick="goTo('detalle')">Ver</button>
+              <button class="btn btn-ghost btn-sm" onclick="goTo('revision')">Revisar</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Comunidad Zenú del Caribaná</strong><br><span class="text-muted text-sm">Etnia: Zenú</span></td>
+            <td>Montería, Córdoba</td>
+            <td>58</td>
+            <td><span class="badge badge-info"><span class="badge-dot"></span>Informe generado</span></td>
+            <td>May 10, 3:21 p.m.</td>
+            <td>
+              <button class="btn btn-outline btn-sm">Ver</button>
+              <button class="btn btn-ghost btn-sm">Revisar</button>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Resguardo Embera Chamí</strong><br><span class="text-muted text-sm">Etnia: Embera</span></td>
+            <td>Belén de Umbría, Risaralda</td>
+            <td>31</td>
+            <td><span class="badge badge-neutral"><span class="badge-dot"></span>Datos cargados</span></td>
+            <td>—</td>
+            <td>
+              <button class="btn btn-outline btn-sm">Ver</button>
+              <button class="btn btn-primary btn-sm">Generar</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────
+     SCREEN 4 — DETALLE DEL ESTUDIO
+──────────────────────────────────────────────────────── -->
+<div id="screen-detalle" class="screen-content hidden">
+  <!-- Header -->
+  <div class="card mb-4" style="margin-bottom:20px;">
+    <div class="card-body">
+      <div class="flex justify-between items-center">
+        <div>
+          <div class="page-title">Cabildo Indígena Murui Muina</div>
+          <div class="page-sub">Etnia Murui-Muina (Uitoto) · Florencia, Caquetá · NIT: comunidad registrada ante Ministerio Interior</div>
+        </div>
+        <div class="flex gap-2">
+          <span class="badge badge-warning" style="font-size:13px;padding:6px 14px;"><span class="badge-dot"></span>En revisión</span>
+          <button class="btn btn-primary" onclick="goTo('generar')">⚡ Generar informe</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;text-align:center;">
+        <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">CORPUS TOTAL</div><div style="font-size:18px;font-weight:700;">62</div><div class="text-sm text-muted">archivos</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">FASE 1</div><div style="font-size:18px;font-weight:700;">14</div><div class="text-sm text-muted">documentos</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">FASE 2</div><div style="font-size:18px;font-weight:700;">46</div><div class="text-sm text-muted">archivos + SIG</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">FASE 3</div><div style="font-size:18px;font-weight:700;">2</div><div class="text-sm text-muted">documentos</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">CAPAS SIG</div><div style="font-size:18px;font-weight:700;color:var(--primary)">4</div><div class="text-sm text-muted">127 puntos</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'tab-f1')">📁 FASE 1 — Pre-campo</div>
+    <div class="tab" onclick="switchTab(this,'tab-f2')">📁 FASE 2 — Campo</div>
+    <div class="tab" onclick="switchTab(this,'tab-f3')">📁 FASE 3 — Post-campo</div>
+    <div class="tab" onclick="switchTab(this,'tab-drive')">☁ Google Drive</div>
+  </div>
+
+  <!-- FASE 1 -->
+  <div id="tab-f1" class="tab-panel">
+    <div class="two-col">
+      <div>
+        <div class="card">
+          <div class="card-header"><span class="section-title" style="margin:0">Árbol de archivos</span> <span class="text-sm text-muted">14 archivos · Todo sincronizado ✓</span></div>
+          <div class="card-body">
+            <div class="file-tree">
+              <div class="file-folder">
+                <div class="file-folder-name">📂 SOLICITUD <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">6 archivos</span></div>
+                <div class="file-list">
+                  <div class="file-item"><div class="file-left">📄 Solicitud Formal.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Reglamento interno.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Acta de elección.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Acta de posesión.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📝 Reseña histórica.docx</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📊 Autocenso_Murui Muina.xlsx</div><span class="file-check">✓</span></div>
+                </div>
+              </div>
+              <div class="file-folder">
+                <div class="file-folder-name">📂 ACERVO CABILDO MUINA <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">7 archivos</span></div>
+                <div class="file-list">
+                  <div class="file-item"><div class="file-left">📄 Asamblea_2020.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Acta de Posesion.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 bd-caqueta.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Censo comunidad Murui.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📝 ENLACES CABILDO MUINA.docx</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Lista de asistencia elecciones.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 RUT comunidad Muina.pdf</div><span class="file-check">✓</span></div>
+                </div>
+              </div>
+              <div class="file-folder">
+                <div class="file-folder-name">📂 FICHA DE PRE-CAMPO <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">1 archivo</span></div>
+                <div class="file-list">
+                  <div class="file-item"><div class="file-left">📝 Ficha de Pre-campo_MURUI.docx</div><span class="file-check">✓</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card mb-4" style="margin-bottom:16px;">
+          <div class="card-header"><span class="section-title" style="margin:0">Datos del cabildo</span></div>
+          <div class="card-body">
+            <table style="width:100%;font-size:13px;">
+              <tr><td style="color:var(--text-muted);padding:5px 0;width:45%">Nombre oficial</td><td style="font-weight:500;">Cabildo Indígena Murui Muina</td></tr>
+              <tr><td style="color:var(--text-muted);padding:5px 0;">Municipio</td><td>Florencia</td></tr>
+              <tr><td style="color:var(--text-muted);padding:5px 0;">Departamento</td><td>Caquetá</td></tr>
+              <tr><td style="color:var(--text-muted);padding:5px 0;">Gobernadora</td><td style="font-weight:500;">Identificada en acta</td></tr>
+              <tr><td style="color:var(--text-muted);padding:5px 0;">Familias (autocenso)</td><td><strong style="color:var(--warning)">27 familias</strong> ⚠</td></tr>
+              <tr><td style="color:var(--text-muted);padding:5px 0;">Personas (autocenso)</td><td><strong style="color:var(--warning)">98 personas</strong> ⚠</td></tr>
+              <tr><td style="color:var(--text-muted);padding:5px 0;">Discrepancia detectada</td><td><span class="badge badge-warning"><span class="badge-dot"></span>Revisar fuentes</span></td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="alert alert-warning">
+          ⚠ <div><strong>Discrepancia poblacional detectada</strong><br>El autocenso registra 27 familias / 98 personas. El censo del Ministerio indica 24 familias. El sistema marcará esto en el módulo de validación del informe.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FASE 2 -->
+  <div id="tab-f2" class="tab-panel hidden">
+    <div class="two-col">
+      <div>
+        <div class="card">
+          <div class="card-header"><span class="section-title" style="margin:0">Árbol de archivos — Campo</span><span class="text-sm text-muted">46 archivos</span></div>
+          <div class="card-body">
+            <div class="file-tree">
+              <div class="file-folder">
+                <div class="file-folder-name">🗺 INFORMACIÓN SIG / ETNIA 1 <span style="margin-left:auto;font-size:11px;background:#eff6ff;color:var(--primary);padding:2px 7px;border-radius:4px;">Núcleo SIG</span></div>
+                <div class="file-list">
+                  <div class="file-item"><div class="file-left">🗺 ETNIA1_CABILDO_MURUI.qgz <span style="font-size:11px;color:var(--primary);margin-left:6px;">QGIS</span></div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🗄 GeoPackage.gpkg <span style="font-size:11px;color:var(--primary);margin-left:6px;">GP</span></div><span class="file-check">✓</span></div>
+                  <div class="file-item" style="color:var(--success);"><div class="file-left">✦ Capa: Prácticas Culturales (34 pts)</div><span class="file-check">✓</span></div>
+                  <div class="file-item" style="color:var(--success);"><div class="file-left">✦ Capa: Expresiones Simbólicas (28 pts)</div><span class="file-check">✓</span></div>
+                  <div class="file-item" style="color:var(--success);"><div class="file-left">✦ Capa: Entornos Territoriales (39 pts)</div><span class="file-check">✓</span></div>
+                  <div class="file-item" style="color:var(--success);"><div class="file-left">✦ Capa: Procesos Organizativos (26 pts)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📊 Fichas de campo.xlsx</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📊 Meta Datos.xlsx</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📊 Análisis.xlsx</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📊 coordenadas.xlsx</div><span class="file-check">✓</span></div>
+                </div>
+              </div>
+              <div class="file-folder">
+                <div class="file-folder-name">📷 EVIDENCIA FOTOGRÁFICA <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">28 imágenes</span></div>
+                <div class="file-list">
+                  <div class="file-item"><div class="file-left">🖼 Artesanías (3 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 Danza tradicional (2 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 Gastronomía (4 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 Indumentaria (2 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 Maloka Murui (3 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 Objetos culturales (5 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 Vivienda tradicional (2 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 Reunión comunidad (3 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 Cartografía social (2 imgs)</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">🖼 IMG_0079.HEIC · IMG_0080.HEIC</div><span class="file-check">✓</span></div>
+                </div>
+              </div>
+              <div class="file-folder">
+                <div class="file-folder-name">📋 DOCUMENTOS DE CAMPO <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">5 archivos</span></div>
+                <div class="file-list">
+                  <div class="file-item"><div class="file-left">📄 Acta de inicio Murui Muina.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Diario de campo.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Ficha de comisión.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Cartografía social Murui Muina.pdf</div><span class="file-check">✓</span></div>
+                  <div class="file-item"><div class="file-left">📄 Árbol de riesgo Murui Muina.pdf</div><span class="file-check">✓</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-header"><span class="section-title" style="margin:0">Mapa de referencia SIG</span></div>
+          <div class="card-body" style="text-align:center;">
+            <div style="background:#e8f4f8;border:1px dashed #93c5fd;border-radius:8px;padding:40px 20px;color:#1e3a5f;">
+              <div style="font-size:32px;margin-bottom:8px;">🗺</div>
+              <div style="font-weight:600;font-size:14px;">Mapa Murui Muina — Florencia, Caquetá</div>
+              <div style="font-size:12px;color:#64748b;margin-top:6px;">4 capas · 127 puntos · Sistema: WGS84</div>
+              <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                <span style="background:#2563eb;color:#fff;font-size:11px;padding:3px 9px;border-radius:4px;">● Prácticas Culturales</span>
+                <span style="background:#16a34a;color:#fff;font-size:11px;padding:3px 9px;border-radius:4px;">● Expresiones Simbólicas</span>
+                <span style="background:#d97706;color:#fff;font-size:11px;padding:3px 9px;border-radius:4px;">● Entornos Territoriales</span>
+                <span style="background:#7c3aed;color:#fff;font-size:11px;padding:3px 9px;border-radius:4px;">● Procesos Organizativos</span>
+              </div>
+              <div style="margin-top:12px;font-size:11px;color:#94a3b8;">[Vista previa del mapa se generará al procesar el informe]</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FASE 3 -->
+  <div id="tab-f3" class="tab-panel hidden">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header"><span class="section-title" style="margin:0">Archivos post-campo</span></div>
+        <div class="card-body">
+          <div class="file-tree">
+            <div class="file-folder">
+              <div class="file-folder-name">📂 CONCEPTO</div>
+              <div class="file-list">
+                <div class="file-item"><div class="file-left">📄 Informe_Comunidad Murui Muina.pdf <span style="font-size:11px;color:var(--info);margin-left:6px;">Referencia</span></div><span class="file-check">✓</span></div>
+              </div>
+            </div>
+            <div class="file-folder">
+              <div class="file-folder-name">📂 ACTO ADMINISTRATIVO</div>
+              <div class="file-list">
+                <div class="file-item"><div class="file-left">📝 Borrador Acto administrativo.docx <span style="font-size:11px;color:var(--warning);margin-left:6px;">Borrador</span></div><span class="file-warn">⚠</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="alert alert-info">ℹ <div>El <strong>Informe de Comunidad Murui Muina.pdf</strong> es la plantilla de referencia usada por el motor para replicar la estructura institucional del informe final.</div></div>
+        <div class="alert alert-warning">⚠ <div>El <strong>Acto Administrativo</strong> está en borrador. La versión firmada deberá cargarse al Drive una vez emitida la resolución de reconocimiento.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRIVE -->
+  <div id="tab-drive" class="tab-panel hidden">
+    <div class="alert alert-success" style="margin-bottom:16px;">✓ <div>Conexión activa con Google Drive. Última sincronización: <strong>hoy 10:02 a.m.</strong> · 62 archivos · 1.4 GB</div></div>
+    <div class="card">
+      <div class="card-body" style="text-align:center;padding:40px;">
+        <div style="font-size:40px;margin-bottom:10px;">☁</div>
+        <div style="font-weight:600;font-size:15px;margin-bottom:6px;">Carpeta sincronizada</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px;">CABILDO INDIGENA MUINA / Google Drive compartido</div>
+        <button class="btn btn-outline">🔄 Forzar sincronización</button>
+        <button class="btn btn-ghost" style="margin-left:8px">📂 Abrir en Drive</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────
+     SCREEN 5 — GENERAR INFORME
+──────────────────────────────────────────────────────── -->
+<div id="screen-generar" class="screen-content hidden">
+  <div style="margin-bottom:20px;">
+    <div class="page-title">Generar informe</div>
+    <div class="page-sub">Cabildo Indígena Murui Muina · Configuración y validación del corpus</div>
+  </div>
+
+  <div class="two-col">
+    <!-- Parámetros -->
+    <div>
+      <div class="card">
+        <div class="card-header"><span class="section-title" style="margin:0">⚙ Parámetros de generación</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Estudio</label>
+            <input class="form-input" value="Cabildo Indígena Murui Muina" readonly style="background:#f8fafc;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Buffer de influencia (metros)</label>
+            <input class="form-input" type="number" value="50">
+            <div class="form-hint">Buffer estándar Ministerio del Interior: 50 m</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Capas SIG a procesar</label>
+            <div class="checkbox-group">
+              <div class="checkbox-item"><input type="checkbox" checked id="c1"><label for="c1">Prácticas Culturales <span style="color:var(--text-muted);font-size:11px;">(34 puntos)</span></label></div>
+              <div class="checkbox-item"><input type="checkbox" checked id="c2"><label for="c2">Expresiones Simbólicas <span style="color:var(--text-muted);font-size:11px;">(28 puntos)</span></label></div>
+              <div class="checkbox-item"><input type="checkbox" checked id="c3"><label for="c3">Entornos Territoriales <span style="color:var(--text-muted);font-size:11px;">(39 puntos)</span></label></div>
+              <div class="checkbox-item"><input type="checkbox" checked id="c4"><label for="c4">Procesos Organizativos <span style="color:var(--text-muted);font-size:11px;">(26 puntos)</span></label></div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="form-group">
+            <label class="form-label">Módulos analíticos de valor agregado</label>
+            <div class="checkbox-group">
+              <div class="checkbox-item"><input type="checkbox" checked id="m1"><label for="m1">Validación de discrepancias poblacionales</label></div>
+              <div class="checkbox-item"><input type="checkbox" checked id="m2"><label for="m2">Cruce con datos abiertos DANE</label></div>
+              <div class="checkbox-item"><input type="checkbox" checked id="m3"><label for="m3">Red de actores clave</label></div>
+              <div class="checkbox-item"><input type="checkbox" checked id="m4"><label for="m4">Línea de tiempo de eventos organizativos</label></div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="form-group">
+            <label class="form-label">Formato de salida</label>
+            <select class="form-select">
+              <option selected>Word (.docx) — Estándar institucional</option>
+              <option>PDF (solo visualización)</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-footer" style="text-align:right;">
+          <button class="btn btn-outline btn-sm" style="margin-right:8px;">Vista previa del corpus</button>
+          <button class="btn btn-primary btn-lg" onclick="showProgress()">⚡ Generar informe completo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Validación del corpus + progreso -->
+    <div>
+      <div class="card" id="corpus-validation-card">
+        <div class="card-header"><span class="section-title" style="margin:0">✓ Validación del corpus</span></div>
+        <div class="card-body">
+          <div class="corpus-item ok"><div><div class="corpus-label">📁 FASE 1 — Pre-campo</div><div class="corpus-count">14 de 14 archivos encontrados</div></div><span class="badge badge-success">✓ Completo</span></div>
+          <div class="corpus-item ok"><div><div class="corpus-label">📁 FASE 2 — Campo</div><div class="corpus-count">46 de 46 archivos encontrados</div></div><span class="badge badge-success">✓ Completo</span></div>
+          <div class="corpus-item warn"><div><div class="corpus-label">📁 FASE 3 — Post-campo</div><div class="corpus-count">1 de 2 archivos (falta Acto administrativo firmado)</div></div><span class="badge badge-warning">⚠ Incompleto</span></div>
+          <div class="divider"></div>
+          <div class="corpus-item ok"><div><div class="corpus-label">🗺 Proyecto QGIS</div><div class="corpus-count">ETNIA1_CABILDO_MURUI.qgz detectado</div></div><span class="badge badge-success">✓</span></div>
+          <div class="corpus-item ok"><div><div class="corpus-label">🗄 GeoPackage</div><div class="corpus-count">Archivo .gpkg detectado y legible</div></div><span class="badge badge-success">✓</span></div>
+          <div class="corpus-item ok"><div><div class="corpus-label">✦ Capas SIG</div><div class="corpus-count">4 capas · 127 puntos georreferenciados</div></div><span class="badge badge-success">✓ 4/4</span></div>
+          <div class="corpus-item ok"><div><div class="corpus-label">📊 Autocenso</div><div class="corpus-count">Autocenso_Murui Muina.xlsx · 98 personas, 27 familias</div></div><span class="badge badge-success">✓</span></div>
+          <div class="corpus-item warn"><div><div class="corpus-label">⚠ Discrepancia poblacional</div><div class="corpus-count">Autocenso vs. Censo Ministerio: diferencia de 3 familias</div></div><span class="badge badge-warning">Revisar</span></div>
+        </div>
+      </div>
+
+      <!-- PROGRESS (hidden by default) -->
+      <div class="card hidden" id="progress-card">
+        <div class="card-header">
+          <span class="section-title" style="margin:0">⚡ Generando informe...</span>
+          <span class="text-sm text-muted">~8 min estimados</span>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;color:var(--text-muted)">
+              <span>Progreso general</span><span id="pct-text">65%</span>
+            </div>
+            <div class="progress-bar-wrap" style="height:8px;">
+              <div class="progress-bar animated" id="main-progress-bar" style="width:65%"></div>
+            </div>
+          </div>
+          <div class="steps">
+            <div class="step done">
+              <div class="step-icon">✓</div>
+              <div class="step-content">
+                <div class="step-name">Sincronización del corpus</div>
+                <div class="step-detail">62 archivos · 1.4 GB · 14 s</div>
+              </div>
+            </div>
+            <div class="step done">
+              <div class="step-icon">✓</div>
+              <div class="step-content">
+                <div class="step-name">Lectura de capas SIG</div>
+                <div class="step-detail">4 capas · 127 puntos · ETNIA1_CABILDO_MURUI.qgz</div>
+              </div>
+            </div>
+            <div class="step active">
+              <div class="step-icon">◷</div>
+              <div class="step-content">
+                <div class="step-name">Análisis geoespacial</div>
+                <div class="step-detail">Buffers 50 m · 6 matrices de distancia · 6 superposiciones… 65%</div>
+              </div>
+            </div>
+            <div class="step pending">
+              <div class="step-icon">4</div>
+              <div class="step-content">
+                <div class="step-name">Extracción documental</div>
+                <div class="step-detail">PDFs, DOCX, XLSX — spaCy NER español</div>
+              </div>
+            </div>
+            <div class="step pending">
+              <div class="step-icon">5</div>
+              <div class="step-content">
+                <div class="step-name">Módulos analíticos</div>
+                <div class="step-detail">Discrepancias · DANE · Red de actores · Línea de tiempo</div>
+              </div>
+            </div>
+            <div class="step pending">
+              <div class="step-icon">6</div>
+              <div class="step-content">
+                <div class="step-name">Ensamblado del informe</div>
+                <div class="step-detail">Plantilla institucional Word · Mapas + tablas + textos</div>
+              </div>
+            </div>
+            <div class="step pending">
+              <div class="step-icon">7</div>
+              <div class="step-content">
+                <div class="step-name">Exportación y registro</div>
+                <div class="step-detail">Informe_MuruiMuina_v1.docx · Trazabilidad guardada</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────
+     SCREEN 6 — REVISIÓN DEL INFORME
+──────────────────────────────────────────────────────── -->
+<div id="screen-revision" class="screen-content hidden">
+  <div class="flex justify-between items-center mb-4">
+    <div>
+      <div class="page-title">Revisión del informe</div>
+      <div class="page-sub">Informe_MuruiMuina_v1.docx · Generado hoy 10:08 a.m. · 47 páginas</div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-outline">⬇ Descargar borrador .docx</button>
+      <button class="btn btn-success btn-lg">✓ Aprobar y exportar versión final</button>
+    </div>
+  </div>
+
+  <div class="col-left-sm" style="grid-template-columns:280px 1fr;align-items:start;">
+    <!-- TOC -->
+    <div class="card">
+      <div class="card-header"><span class="section-title" style="margin:0;font-size:13px;">Índice del informe</span></div>
+      <div class="card-body" style="padding:12px;">
+        <div class="report-toc">
+          <div class="toc-item active" onclick="showSection('s1')"><span>1. Portada institucional</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+          <div class="toc-item" onclick="showSection('s2')"><span>2. Vista general comunidad</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+          <div class="toc-item" onclick="showSection('s3')"><span>3. Contexto territorial</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+          <div class="toc-section">4. Análisis SIG por capa</div>
+          <div class="toc-sub">
+            <div class="toc-item" onclick="showSection('s4a')"><span>4.1 Prácticas Culturales</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+            <div class="toc-item" onclick="showSection('s4b')"><span>4.2 Expresiones Simbólicas</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+            <div class="toc-item" onclick="showSection('s4c')"><span>4.3 Entornos Territoriales</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+            <div class="toc-item" onclick="showSection('s4d')"><span>4.4 Procesos Organizativos</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+          </div>
+          <div class="toc-section">5. Análisis espacial integrado</div>
+          <div class="toc-sub">
+            <div class="toc-item" onclick="showSection('s5a')"><span>5.1 Buffers de influencia</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+            <div class="toc-item" onclick="showSection('s5b')"><span>5.2 Matrices de distancia</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+            <div class="toc-item" onclick="showSection('s5c')"><span>5.3 Superposiciones territoriales</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+          </div>
+          <div class="toc-section">6. Módulos de valor agregado</div>
+          <div class="toc-sub">
+            <div class="toc-item warn" onclick="showSection('s6a')"><span>6.1 Discrepancias poblacionales</span><span class="badge badge-warning" style="font-size:10px;">⚠</span></div>
+            <div class="toc-item" onclick="showSection('s6b')"><span>6.2 Cruce con DANE</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+            <div class="toc-item" onclick="showSection('s6c')"><span>6.3 Red de actores</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+            <div class="toc-item" onclick="showSection('s6d')"><span>6.4 Línea de tiempo</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+          </div>
+          <div class="toc-item" onclick="showSection('s7')"><span>7. Evidencia documental</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+          <div class="toc-item" onclick="showSection('s8')"><span>8. Anexos cartográficos</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+          <div class="toc-item" onclick="showSection('s9')"><span>9. Referencias</span><span class="badge badge-success" style="font-size:10px;">✓</span></div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div style="font-size:11px;color:var(--text-muted);text-align:center;">
+          8/9 secciones aprobadas · 1 requiere revisión
+        </div>
+      </div>
+    </div>
+
+    <!-- Document preview -->
+    <div>
+      <div class="alert alert-warning" style="margin-bottom:12px;">
+        ⚠ <div><strong>Sección 6.1 requiere revisión:</strong> Se detectó discrepancia entre fuentes poblacionales. Verifique y confirme la nota aclaratoria antes de aprobar.</div>
+      </div>
+      <div class="doc-preview" id="doc-content">
+        <!-- Section 6.1 by default (the one with warning) -->
+        <div class="doc-h1">ESTUDIO ETNOLÓGICO<br>CABILDO INDÍGENA MURUI MUINA</div>
+        <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-bottom:20px;">Ministerio del Interior · Dirección de Asuntos Indígenas · Mayo 2026</div>
+
+        <div class="doc-h2">6.1 Validación de discrepancias entre fuentes poblacionales</div>
+        <p class="doc-p">Con el fin de garantizar la consistencia de la información demográfica del Cabildo Indígena Murui Muina, el sistema realizó el cruce automático de las cuatro fuentes disponibles en el corpus:</p>
+
+        <table class="doc-table">
+          <thead>
+            <tr><th>Fuente</th><th>Familias</th><th>Personas</th><th>Fecha</th><th>Estado</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Censo del Ministerio del Interior</td><td>24</td><td>89</td><td>2024</td><td>✓ Oficial</td></tr>
+            <tr class="discrepancy"><td>Autocenso comunitario</td><td class="highlight-warn">27</td><td class="highlight-warn">98</td><td>2025</td><td>⚠ Diferencia</td></tr>
+            <tr><td>Derecho de petición (solicitud)</td><td>25</td><td>92</td><td>2025</td><td>✓</td></tr>
+            <tr><td>Registros del cabildo (actas)</td><td>26</td><td>95</td><td>2025</td><td>✓</td></tr>
+          </tbody>
+        </table>
+
+        <p class="doc-p">Se identifican <strong>discrepancias en el número de familias</strong> entre el Censo del Ministerio (24 familias / 89 personas) y el autocenso comunitario más reciente (27 familias / 98 personas), con una diferencia de 3 familias y 9 personas.</p>
+
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:12px;font-size:12.5px;color:#92400e;margin:12px 0;">
+          <strong>⚠ Nota aclaratoria generada automáticamente:</strong> La diferencia puede explicarse por nacimientos posteriores al último corte censal del Ministerio (2024) y por el ingreso de 3 familias que se han autoreconocido como parte del colectivo en el período 2024-2025. Se recomienda al responsable técnico validar y complementar esta nota.
+          <br><br>
+          <em>[El responsable técnico puede editar esta nota antes de aprobar el informe]</em>
+        </div>
+
+        <div class="doc-h2">6.2 Cruce con datos abiertos del DANE</div>
+        <p class="doc-p">Según el Censo Nacional de Población y Vivienda 2018 (DANE), el municipio de Florencia — Caquetá registra una población total de 175.747 habitantes, de los cuales el 2,4% se autoreconocen como indígenas (4.217 personas). El cabildo Murui Muina representa aproximadamente el 2,3% de la población indígena censada en el municipio.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────
+     SCREEN 7 — USUARIOS
+──────────────────────────────────────────────────────── -->
+<div id="screen-usuarios" class="screen-content hidden">
+  <div class="flex justify-between items-center mb-4">
+    <div>
+      <div class="page-title">Gestión de usuarios</div>
+      <div class="page-sub">4 usuarios registrados en el sistema</div>
+    </div>
+    <button class="btn btn-primary">＋ Nuevo usuario</button>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Usuario</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="flex items-center gap-2"><div class="avatar" style="width:32px;height:32px;">ML</div><div><div style="font-weight:500;">María Fernanda López</div></div></div></td>
+            <td>m.lopez@cliente.gov.co</td>
+            <td><span class="badge badge-info">Responsable Técnico</span></td>
+            <td><span class="badge badge-success"><span class="badge-dot"></span>Activo</span></td>
+            <td>Hoy 10:23 a.m.</td>
+            <td><button class="btn btn-outline btn-sm">Editar</button></td>
+          </tr>
+          <tr>
+            <td><div class="flex items-center gap-2"><div class="avatar" style="width:32px;height:32px;background:#14532d;color:#86efac;">CR</div><div><div style="font-weight:500;">Carlos A. Ruiz</div></div></div></td>
+            <td>c.ruiz@cliente.gov.co</td>
+            <td><span class="badge badge-neutral">Equipo de campo</span></td>
+            <td><span class="badge badge-success"><span class="badge-dot"></span>Activo</span></td>
+            <td>Ayer 4:45 p.m.</td>
+            <td><button class="btn btn-outline btn-sm">Editar</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)">Desactivar</button></td>
+          </tr>
+          <tr>
+            <td><div class="flex items-center gap-2"><div class="avatar" style="width:32px;height:32px;background:#4a044e;color:#e879f9;">SG</div><div><div style="font-weight:500;">Sandra Gómez Vargas</div></div></div></td>
+            <td>s.gomez@cliente.gov.co</td>
+            <td><span class="badge badge-neutral">Equipo de campo</span></td>
+            <td><span class="badge badge-success"><span class="badge-dot"></span>Activo</span></td>
+            <td>May 7, 9:00 a.m.</td>
+            <td><button class="btn btn-outline btn-sm">Editar</button> <button class="btn btn-ghost btn-sm" style="color:var(--danger)">Desactivar</button></td>
+          </tr>
+          <tr>
+            <td><div class="flex items-center gap-2"><div class="avatar" style="width:32px;height:32px;background:#1e3a5f;color:#60a5fa;">AS</div><div><div style="font-weight:500;">Admin Simonky</div></div></div></td>
+            <td>admin@simonky.com.co</td>
+            <td><span class="badge badge-warning">Administrador</span></td>
+            <td><span class="badge badge-success"><span class="badge-dot"></span>Activo</span></td>
+            <td>Hoy 8:55 a.m.</td>
+            <td><button class="btn btn-outline btn-sm">Editar</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────
+     SCREEN 8 — CONFIGURACIÓN
+──────────────────────────────────────────────────────── -->
+<div id="screen-config" class="screen-content hidden">
+  <div style="margin-bottom:20px;">
+    <div class="page-title">Configuración</div>
+    <div class="page-sub">Parámetros globales y plantilla del informe</div>
+  </div>
+  <div class="two-col">
+    <div>
+      <div class="card mb-4" style="margin-bottom:16px;">
+        <div class="card-header"><span class="section-title" style="margin:0">Parámetros SIG globales</span></div>
+        <div class="card-body">
+          <div class="form-group"><label class="form-label">Buffer por defecto (metros)</label><input class="form-input" type="number" value="50"></div>
+          <div class="form-group"><label class="form-label">Sistema de referencia de coordenadas</label><input class="form-input" value="WGS84 — EPSG:4326" readonly style="background:#f8fafc;"></div>
+          <div class="form-group"><label class="form-label">Escala de mapas temáticos</label><select class="form-select"><option>1:5.000</option><option selected>1:10.000</option><option>1:25.000</option></select></div>
+          <div class="form-group"><label class="form-label">Formato exportación de mapas</label><select class="form-select"><option selected>PNG 300 dpi</option><option>SVG</option><option>PDF</option></select></div>
+          <button class="btn btn-primary btn-sm">Guardar cambios</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="section-title" style="margin:0">Integración Google Drive</span></div>
+        <div class="card-body">
+          <div class="alert alert-success" style="margin-bottom:12px;">✓ Cuenta de servicio conectada · drive-api@simonky.iam</div>
+          <div class="form-group"><label class="form-label">Carpeta raíz del corpus</label><input class="form-input" value="CABILDO INDIGENA MUINA" readonly style="background:#f8fafc;"></div>
+          <button class="btn btn-outline btn-sm">Reconfigurar conexión</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-header"><span class="section-title" style="margin:0">Plantilla institucional del informe</span></div>
+        <div class="card-body">
+          <div class="alert alert-info" style="margin-bottom:12px;">ℹ La plantilla define la estructura, tipografía y secciones del documento Word generado.</div>
+          <div class="corpus-item ok" style="margin-bottom:8px;"><div><div class="corpus-label">plantilla_informe_v2.docx</div><div class="corpus-count">Actualizada: May 01, 2026</div></div><span class="badge badge-success">Activa</span></div>
+          <div class="flex gap-2 mt-4">
+            <button class="btn btn-outline btn-sm">⬇ Descargar plantilla</button>
+            <button class="btn btn-primary btn-sm">⬆ Subir nueva versión</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+</div><!-- /app-shell -->
+
+<!-- ══════════════════════════════════════════════════════
+     MOCKUP NAVIGATION BAR (floating)
+═══════════════════════════════════════════════════════ -->
+<div class="mockup-nav">
+  <div class="mockup-label">Pantallas:</div>
+  <button onclick="goTo('login')" id="mnav-login">1. Login</button>
+  <button onclick="goTo('dashboard')" id="mnav-dashboard">2. Dashboard</button>
+  <button onclick="goTo('estudios')" id="mnav-estudios">3. Estudios</button>
+  <button onclick="goTo('detalle')" id="mnav-detalle">4. Corpus</button>
+  <button onclick="goTo('generar')" id="mnav-generar">5. Generar</button>
+  <button onclick="goTo('revision')" id="mnav-revision">6. Revisión</button>
+  <button onclick="goTo('usuarios')" id="mnav-usuarios">7. Usuarios</button>
+  <button onclick="goTo('config')" id="mnav-config">8. Config</button>
+</div>
+
+<script>
+const screens = ['login','dashboard','estudios','detalle','generar','revision','usuarios','config'];
+const breadcrumbs = {
+  login: '',
+  dashboard: 'Dashboard',
+  estudios: 'Estudios',
+  detalle: 'Estudios › Murui Muina',
+  generar: 'Estudios › Murui Muina › Generar informe',
+  revision: 'Estudios › Murui Muina › Revisar informe',
+  usuarios: 'Administración › Usuarios',
+  config: 'Administración › Configuración',
+};
+
+function goTo(name) {
+  // show/hide login vs app shell
+  if (name === 'login') {
+    document.getElementById('screen-login').classList.remove('hidden');
+    document.getElementById('app-shell').classList.add('hidden');
+  } else {
+    document.getElementById('screen-login').classList.add('hidden');
+    document.getElementById('app-shell').classList.remove('hidden');
+  }
+  // show/hide screen content
+  screens.forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    if (el) el.classList.add('hidden');
+  });
+  const target = document.getElementById('screen-' + name);
+  if (target) target.classList.remove('hidden');
+  // breadcrumb
+  const bc = document.getElementById('breadcrumb-text');
+  if (bc) {
+    const parts = (breadcrumbs[name] || '').split('›').map(p => p.trim()).filter(Boolean);
+    if (parts.length === 0) { bc.innerHTML = '<span>EtnoSIG</span>'; }
+    else if (parts.length === 1) { bc.innerHTML = `<span>EtnoSIG</span><span class="sep">›</span><span class="current">${parts[0]}</span>`; }
+    else { bc.innerHTML = `<span>EtnoSIG</span><span class="sep">›</span>` + parts.slice(0,-1).map(p=>`<span>${p}</span><span class="sep">›</span>`).join('') + `<span class="current">${parts[parts.length-1]}</span>`; }
+  }
+  // sidebar active
+  ['dashboard','estudios','detalle','generar','revision','usuarios','config'].forEach(s => {
+    const nav = document.getElementById('nav-' + s);
+    if (nav) nav.classList.remove('active');
+  });
+  const activeNav = document.getElementById('nav-' + name);
+  if (activeNav) activeNav.classList.add('active');
+  // mockup nav active
+  screens.forEach(s => {
+    const b = document.getElementById('mnav-' + s);
+    if (b) b.classList.remove('active');
+  });
+  const mb = document.getElementById('mnav-' + name);
+  if (mb) mb.classList.add('active');
+}
+
+function switchTab(el, panelId) {
+  // tabs in parent
+  el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  // panels
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById(panelId).classList.remove('hidden');
+}
+
+function showProgress() {
+  document.getElementById('corpus-validation-card').classList.add('hidden');
+  document.getElementById('progress-card').classList.remove('hidden');
+}
+
+function showSection(id) {
+  // update active toc item
+  document.querySelectorAll('.toc-item').forEach(i => i.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+
+// init
+goTo('login');
+</script>
+</body>
+</html>

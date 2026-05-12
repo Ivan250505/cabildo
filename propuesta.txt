@@ -1,0 +1,134 @@
+Bucaramanga, mayo 09 de 2026
+
+Señores:
+XXXXXXXXXXX
+
+
+Referencia: Propuesta plataforma de análisis automatizado de datos etnográficos y generación de informes
+
+
+Cordialmente me permito presentar la propuesta técnica y económica para el diseño, desarrollo, implementación y soporte de una plataforma orientada al análisis automatizado de información etnográfica previamente recolectada en campo y a la generación semi-automatizada de informes finales conforme al protocolo del Ministerio del Interior para estudios etnológicos.
+Se ofrece un trabajo profesional, alineado con los lineamientos técnicos y metodológicos que ustedes han establecido, brindando asesoría, acompañamiento y apoyo para asegurar que el motor produzca entregables consistentes con la calidad documental y geoespacial requerida por el cliente final.
+En espera de llenar sus expectativas, quedo atento para brindarle los mejores servicios en los términos indicados en la propuesta anexa.
+
+Atentamente,
+
+Eduwin Andrés Flórez Orejuela
+CTO Simonky S.A.S
+ 
+Propuesta técnica plataforma de análisis automatizado de datos etnográficos
+1. Resumen Ejecutivo
+Esta propuesta presenta el diseño, desarrollo e implementación de una plataforma especializada para el análisis automatizado de información etnográfica previamente recolectada en campo y la generación semi-automatizada de informes finales, orientada a estudios etnológicos de comunidades que se reivindican como indígenas conforme al protocolo establecido por el Ministerio del Interior.
+La solución parte de un corpus existente — organizado en tres fases (pre-campo, campo, post-campo) y compuesto por documentos formales (PDF, DOCX), datos tabulares (XLSX), proyectos geoespaciales (QGIS, GeoPackage, shapefiles), evidencia fotográfica georreferenciada y registros audiovisuales — para producir informes finales consistentes con la metodología SIG aplicada a estudios etnológicos, replicando programáticamente los análisis espaciales (buffers, matrices de distancia y superposiciones territoriales), generando los mapas temáticos por capa y plantillando el documento Word entregable.
+La plataforma incorpora cuatro módulos analíticos de valor agregado: validación automática de discrepancias entre fuentes poblacionales, cruce con datos abiertos del DANE, análisis de red de actores clave y línea de tiempo de actas y asambleas. La interfaz semi-automatizada permite que el equipo profesional dispare la generación de un informe, lo revise, lo ajuste y lo exporte, sin sustituir el criterio metodológico del responsable técnico.
+El alcance contempla la implementación completa en un mes calendario, seguida de once meses adicionales de soporte estable, sumando doce meses de acompañamiento operativo. La infraestructura de hosting corre por cuenta del proveedor en servidores administrados por Simonky S.A.S.
+La inversión propuesta para la implementación integral, incluyendo diseño de solución, desarrollo, despliegue, capacitación, infraestructura y doce meses de soporte, asciende a 40.000.000 COP, alineada con el nivel de especialización técnica requerido, el alcance funcional y la naturaleza repetitiva del producto, que se ejecutará múltiples veces a lo largo del contrato del cliente final.
+2. Contexto y Oportunidad
+El cliente final ejecuta estudios etnológicos para sustentar el reconocimiento estatal de comunidades indígenas conforme al Protocolo del Ministerio del Interior. La metodología actual produce, por cada comunidad estudiada, un volumen significativo de información heterogénea organizada en una estructura por fases: documentación preliminar y solicitudes (pre-campo), evidencia documental, audiovisual y geoespacial levantada en territorio (campo), y actos administrativos y conceptos (post-campo).
+Esta información, una vez consolidada en un repositorio en la nube, debe ser procesada y traducida en un informe final que cumpla con los lineamientos institucionales — incluyendo análisis SIG sobre las capas levantadas, generación de buffers de influencia, matrices de distancia entre capas, superposiciones territoriales, mapas temáticos y la documentación textual asociada con sus respectivas justificaciones técnicas y referencias académicas.
+Hoy ese trabajo se realiza de forma manual o semi-manual, lo que implica tiempos prolongados por cada estudio, riesgos de inconsistencia entre informes producidos por distintos miembros del equipo, dificultad para detectar discrepancias entre fuentes poblacionales (censos institucionales, derechos de petición, autocensos comunitarios) y limitada capacidad de enriquecer los informes con datos contextuales externos como los publicados por el DANE.
+La oportunidad consiste en transformar este proceso en una operación industrializada y semi-automatizada, en la que el conocimiento metodológico del profesional SIG y del equipo de campo queda consolidado en un motor reproducible que genera informes consistentes en horas en lugar de semanas, permitiendo escalar la producción de estudios etnológicos sin sacrificar la calidad técnica que el Ministerio exige.
+3. Propuesta de Valor 
+La plataforma encapsula la metodología actual de análisis SIG aplicada a estudios etnológicos en un motor reproducible que ejecuta programáticamente los cálculos espaciales (buffers de 50 metros sobre las cuatro capas principales, seis matrices de distancia entre capas, seis superposiciones territoriales) y genera los mapas temáticos estandarizados por cada capa levantada en campo.
+Sobre esa base, el sistema produce un borrador del informe final con la estructura completa que el equipo técnico ha estandarizado: portada institucional, vista general de la comunidad, mapas por capa, secciones de análisis espacial con justificaciones teóricas y referencias académicas, tablas consolidadas de capas y archivos resultantes. El borrador es revisado por el responsable técnico, quien ajusta lo que corresponda antes de emitir la versión final.
+El sistema además incorpora cuatro módulos analíticos que enriquecen el informe final con análisis que hoy no se realizan o se realizan de forma manual: validación automática de discrepancias entre fuentes poblacionales (censos institucionales, derechos de petición, autocensos comunitarios y registros del cabildo), cruce con datos abiertos del DANE para contextualización demográfica del municipio, análisis de red de actores clave a partir de la ficha pre-campo y las actas de asamblea, y línea de tiempo de eventos organizativos extraídos de los documentos.
+El retorno operativo se manifiesta en tres dimensiones. Primero, una reducción sustancial del tiempo de producción de cada informe, que pasa de semanas de trabajo manual a horas de generación automatizada más revisión humana. Segundo, una consistencia metodológica garantizada entre informes producidos por distintos miembros del equipo, dado que el motor aplica la misma plantilla, los mismos parámetros y los mismos cálculos a todos los estudios. Tercero, una capacidad de escalamiento que permite atender un mayor número de comunidades dentro del mismo plazo contractual sin incrementar proporcionalmente la carga del equipo profesional.
+4. Arquitectura de Solución
+La plataforma se construye como una aplicación web modular alojada en infraestructura administrada por Simonky S.A.S. La arquitectura privilegia la robustez técnica, la mantenibilidad y la trazabilidad de cada informe generado, evitando la sobre-ingeniería en componentes que no aportan al alcance funcional acordado.
+4.1 Capa de procesamiento
+Backend en Python con framework FastAPI, ejecutando las librerías especializadas para cada tarea: GeoPandas y Shapely para procesamiento geoespacial, Matplotlib y Contextily para generación de mapas temáticos, pdfplumber y python-docx para extracción y construcción documental, pandas para manipulación tabular, y spaCy con modelos en español para extracción de entidades nombradas (fechas, personas, lugares) en los documentos del corpus.
+4.2 Capa de ingesta
+Conector con Google Drive API para sincronización de carpetas del corpus, con normalización de la estructura por fases y reconocimiento automático de tipos de archivo. Soporte para formatos GeoPackage, shapefile, proyectos QGIS, PDF, DOCX, XLSX, JPG/HEIC con metadatos EXIF y archivos audiovisuales con extracción de metadatos.
+4.3 Capa de plantillado documental
+Motor de generación de documentos Word a partir de plantillas configurables, que ensambla los componentes producidos por las capas anteriores — mapas temáticos, tablas, textos contextualizados, justificaciones teóricas estandarizadas, gráficos analíticos — en un documento que respeta la estructura institucional del informe final.
+4.4 Interfaz de usuario
+Aplicación web ligera para los usuarios autorizados del cliente final, permitiendo seleccionar el estudio a procesar, disparar la generación del informe, revisar el resultado, ajustar parámetros y exportar la versión final en formato Word. La interfaz está diseñada para no requerir conocimientos de programación ni de SIG, manteniendo el control en el responsable técnico que valida cada entregable.
+4.5 Almacenamiento y persistencia
+Base de datos PostgreSQL para metadatos de estudios, registros de ejecución y resultados de análisis. Almacenamiento de archivos estructurado en sistema de ficheros con control de versiones por estudio. Bitácora completa de cada generación de informe para trazabilidad ante auditoría.
+4.6 Seguridad y acceso
+Autenticación con cuentas individuales por usuario, control de roles, registro de actividades. Cifrado de datos en tránsito con TLS y en reposo en la base de datos. Las copias del corpus se mantienen en servidores administrados con respaldos automatizados, y el acceso al sistema queda restringido al personal autorizado por el cliente final.
+5. Capacidades funcionales del sistema
+5.1 Ingesta y normalización de datos
+La plataforma se conecta al repositorio en la nube donde reside el corpus de cada estudio etnológico. Reconoce automáticamente la estructura por fases (pre-campo, campo, post-campo), clasifica los archivos por tipo y los normaliza para procesamiento. Detecta los proyectos QGIS y archivos GeoPackage que contienen las capas levantadas en campo, identifica los documentos formales (actas, censos, fichas) y los datos tabulares (autocensos, matrices) que alimentan las distintas secciones del informe.
+5.2 Procesamiento geoespacial automatizado
+El motor SIG reproduce programáticamente la metodología de análisis espacial estandarizada en los estudios actuales. A partir de las cuatro capas principales — Prácticas Culturales, Expresiones Simbólicas, Entornos Territoriales y Procesos Organizativos — genera los buffers de influencia de 50 metros, las seis matrices de distancia entre capas y las seis superposiciones territoriales documentadas en el modelo replicable de análisis espacial. Adicionalmente produce los mapas temáticos por capa con simbología consistente, incluyendo las capas de soporte topográfico (infraestructura, hidrografía, vías, caminos tradicionales, linderos, zonas ambientales y actividades extractivas) como referencia cartográfica.
+5.3 Procesamiento documental y extracción de datos
+Extracción estructurada de información desde los documentos del corpus: actas de elección y posesión, censo del Ministerio, derechos de petición, autocenso comunitario, reglamento interno, reseña histórica, ficha de pre-campo y actos administrativos. El sistema identifica datos clave como cifras poblacionales, nombres y cargos de actores, fechas de eventos relevantes, ubicaciones territoriales y referencias normativas, integrándolos en las secciones correspondientes del informe.
+5.4 Análisis cruzado y validación automática
+Cuatro módulos analíticos enriquecen el informe final con valor agregado:
+•	Validación de discrepancias entre fuentes poblacionales: el sistema cruza automáticamente los conteos de población y familias provenientes del censo del Ministerio, el derecho de petición, el autocenso comunitario y los registros del cabildo, alertando al responsable técnico sobre inconsistencias que deban ser documentadas o resueltas en el informe.
+•	Cruce con datos abiertos del DANE: se enriquece la sección de contexto territorial con información demográfica oficial del municipio (Censo Nacional de Población y Vivienda, proyecciones poblacionales, autorreconocimiento étnico), permitiendo comparar la composición del cabildo con la población indígena censada en el municipio y el departamento.
+•	Análisis de red de actores clave: a partir de la información estructurada de la ficha pre-campo y las actas de asamblea, el sistema genera un diagrama de la estructura organizativa del cabildo (gobernadora, vicegobernador, secretaria, consejero mayor, médico tradicional, cacique y demás cargos identificados) y, opcionalmente, una red de co-ocurrencias derivada de las menciones en los documentos.
+•	Línea de tiempo de eventos organizativos: extracción automática de fechas y eventos significativos en la trayectoria del colectivo (asambleas, elecciones, actas de posesión, derechos de petición, hitos institucionales) y construcción de una cronología visual incorporada al informe como evidencia de continuidad organizativa.
+5.5 Generación semi-automatizada de informes
+Sobre la plantilla institucional del informe final, el sistema ensambla todos los componentes generados por las capas anteriores — encabezado con datos del contrato y del equipo, mapas temáticos por capa, tablas resultantes, secciones de análisis con sus justificaciones técnicas y referencias académicas, módulos de valor agregado, anexos cartográficos — produciendo un documento Word completo que el responsable técnico revisa, ajusta y aprueba antes de su entrega final. La generación es bajo demanda, disparada por el usuario autorizado desde la interfaz.
+5.6 Interfaz operativa y administración
+Panel de control con listado de estudios disponibles, estado de cada uno (datos cargados, listo para procesar, informe generado, en revisión, aprobado), historial de versiones por estudio y registro de ejecuciones. Gestión de usuarios con roles diferenciados, dashboard de métricas operativas y configuración de parámetros analíticos cuando se requiera ajustar la plantilla o los criterios de análisis.
+6. Características no funcionales y nivel de servicio
+6.1 Rendimiento
+El sistema está dimensionado para procesar estudios con corpus de hasta varios gigabytes en tiempos razonables. La generación de un informe completo, incluyendo la construcción de mapas, los cálculos espaciales y el ensamblado del documento, se ejecuta en menos de quince minutos en condiciones normales de operación.
+6.2 Seguridad
+Cifrado en tránsito mediante TLS, autenticación individual por usuario, control de roles, registro de auditoría de accesos y operaciones. Manejo de información sensible conforme a la normativa colombiana de protección de datos personales y conforme a las consideraciones éticas aplicables al manejo de información etnográfica de comunidades indígenas.
+6.3 Disponibilidad
+Disponibilidad objetivo del 99% mensual durante la operación estable, con ventanas de mantenimiento programado anunciadas con anticipación. Respaldos automatizados diarios del corpus y de la base de datos, con retención mínima de treinta días.
+6.4 Usabilidad
+La interfaz está diseñada para usuarios profesionales sin formación en programación ni en SIG. La curva de aprendizaje se cubre en una sesión de capacitación. Documentación accesible en línea, mensajes de error en lenguaje claro y trazabilidad operativa para que el responsable técnico pueda intervenir cuando sea necesario.
+7. Metodología de Implementación y Gobierno
+El proyecto se ejecuta bajo un enfoque iterativo concentrado en cuatro semanas, con entregables al cierre de cada semana y validación continua del responsable técnico del cliente. La concentración del cronograma exige equipo dedicado a tiempo completo durante el mes de implementación, lo que se contempla en la estructura de costos.
+El equipo asignado incluye conocimiento específico sobre arquitectura de soluciones, procesamiento geoespacial, desarrollado full-stack, procesamiento de lenguaje natural y elementos de transformación digital, bajo coordinación directa del CTO de Simonky S.A.S.
+La gobernanza durante la implementación contempla reuniones semanales de avance con el responsable técnico del cliente, revisiones formales al cierre de cada semana, gestión documentada de riesgos y mecanismos de escalamiento. Durante la operación estable se mantienen reuniones mensuales de seguimiento, atención de incidencias por canal definido y reportes de operación.
+Se implementan pruebas automatizadas desde la primera semana, incluyendo validación de reproducibilidad de los análisis SIG (los resultados del motor deben coincidir con los producidos por el método actual sobre el mismo corpus), monitoreo continuo de la generación de informes y verificación de integridad de los datos.
+8. Plan de trabajo y cronograma
+El proyecto se ejecuta en una fase intensiva de implementación de cuatro semanas, seguida de once meses de operación estable con soporte. La tabla siguiente resume las actividades por semana de la fase de implementación.
+
+Semana	Actividades principales	Entregables
+Semana 1	Taller de diseño con responsable técnico, levantamiento de la plantilla institucional del informe, configuración de la conexión al repositorio del corpus, definición de parámetros analíticos y diseño técnico de los módulos.	Documento de diseño funcional y técnico, plantilla del informe formalizada, conector al repositorio operativo, ambiente de desarrollo configurado.
+Semana 2	Desarrollo del motor de procesamiento geoespacial: lectura de proyectos QGIS y GeoPackage, generación de mapas temáticos por capa, cálculo de buffers, matrices de distancia y superposiciones territoriales.	Motor SIG operativo, validado contra resultados del método actual sobre un estudio de referencia. Mapas temáticos generados automáticamente.
+Semana 3	Desarrollo del procesamiento documental, los cuatro módulos analíticos de valor agregado y el plantillador del informe final. Integración con interfaz web.	Módulos analíticos operativos, plantillador funcional, interfaz web operativa, primer informe generado de extremo a extremo.
+Semana 4	Pruebas integrales sobre estudios reales, ajustes finales por retroalimentación del cliente, despliegue en infraestructura de producción, capacitación del equipo del cliente y go-live.	Plataforma en producción, equipo capacitado, documentación entregada, primer informe oficial generado por el cliente.
+
+A partir del segundo mes calendario y durante los once meses siguientes, la plataforma entra en operación estable con el esquema de soporte detallado en la sección 10.
+9. Entregables, propiedad intelectual y transferencia
+9.1 Documentación técnica
+•	Manual de arquitectura: diagramas de componentes, decisiones técnicas, especificaciones de interfaces y dependencias.
+•	Manual de administración: procedimientos de despliegue, configuración, operación, monitoreo y resolución de incidencias.
+•	Manual de usuario: guías paso a paso para los profesionales del cliente, con capturas de pantalla y casos de uso.
+•	Documentación del motor SIG: especificación de los algoritmos de buffer, matrices de distancia y superposiciones, alineada con la metodología actual.
+9.2 Material de capacitación
+Sesiones de capacitación en vivo grabadas para el equipo del cliente, guía de referencia rápida para uso diario, tutoriales en video sobre las operaciones más frecuentes y canal de consultas durante el periodo de soporte.
+9.3 Código y configuraciones
+Se entrega el código fuente completo (motor de procesamiento, plantillador, interfaz web) en repositorio Git privado con historial, junto con scripts de despliegue, configuraciones de seguridad y plantillas del informe. La propiedad intelectual del código queda transferida al cliente final del proyecto al cierre de la fase de implementación, con licencia perpetua y derecho a modificaciones internas.
+10. Modelo de Soporte y Evolución Continua
+El soporte se estructura en dos niveles diferenciados según la fase del proyecto, garantizando un acompañamiento intensivo durante la implementación y los primeros días de operación, y una operación estable durante los once meses siguientes.
+
+Fase	Duración	Nivel de soporte	Tiempos de respuesta
+Implementación y operación inicial	Mes 1 (4 semanas)	Premium 24/7	Críticos: 1 hora; Altos: 4 horas; Medios: 24 horas
+Operación estable	Mes 2 a Mes 12 (11 meses)	Estándar en horario hábil	Críticos: 4 horas; Altos: 24 horas; Medios: 72 horas
+
+El soporte incluye atención de incidencias, actualizaciones correctivas, ajustes a la plantilla del informe ante cambios menores de lineamientos del cliente final, optimizaciones de rendimiento y una bolsa inicial de horas para mejoras menores solicitadas por el equipo. El hosting y la infraestructura asociada quedan cubiertos durante los doce meses sin costo adicional.
+11. Inversión y Estructura de Costos
+La inversión total propuesta asciende a 40.000.000 COP (IVA incluido), distribuida en componentes que reflejan el nivel de especialización técnica, la concentración del equipo durante la fase intensiva de implementación, los módulos analíticos de valor agregado y los doce meses de soporte y hosting incluidos.
+
+Componente	%	Monto (COP)	Descripción
+Diseño y arquitectura	12%	4.800.000	Taller de diseño con responsable técnico, formalización de la plantilla institucional, definición de parámetros analíticos, arquitectura técnica.
+Desarrollo motor SIG y procesamiento documental	35%	14.000.000	Lectura de proyectos QGIS y GeoPackage, generación de mapas temáticos, buffers, matrices de distancia, superposiciones, extracción de datos desde PDFs, DOCX y XLSX.
+Módulos analíticos de valor agregado	13%	5.200.000	Validación de discrepancias entre fuentes, cruce con datos abiertos del DANE, análisis de red de actores clave, línea de tiempo de eventos organizativos.
+Plantillador e interfaz operativa	12%	4.800.000	Motor de generación documental Word a partir de plantilla, interfaz web para gestión de estudios, generación de informes, revisión y exportación.
+Infraestructura y hosting (12 meses)	8%	3.200.000	Servidores administrados por Simonky S.A.S., respaldos automatizados, monitoreo, certificados SSL, mantenimiento preventivo durante todo el periodo.
+Capacitación y transferencia	5%	2.000.000	Sesiones de capacitación en vivo, materiales escritos, video tutoriales, transferencia metodológica al equipo del cliente.
+Soporte 12 meses	12%	4.800.000	Atención de incidencias, actualizaciones correctivas, ajustes a la plantilla, optimizaciones, bolsa inicial de horas para mejoras menores.
+Gestión de proyecto y contingencias	3%	1.200.000	Coordinación, gestión de riesgos, reuniones de seguimiento, reservas para imprevistos.
+Total	100%	40.000.000	
+
+La forma de pago se acuerda en el contrato y puede contemplar un anticipo a la firma y un pago final contra entrega al cierre de la fase de implementación.
+12. Garantías, SLAs y Compromisos
+•	Garantía técnica: doce meses sobre defectos de desarrollo, con correcciones sin costo adicional.
+•	SLA de disponibilidad: 99% mensual durante la operación estable, medido sobre la disponibilidad de la interfaz operativa y el motor de generación de informes.
+•	Tiempos de respuesta en soporte: según la fase del proyecto, con escalamiento documentado para incidencias críticas.
+•	Confidencialidad: compromiso de confidencialidad sobre el corpus, los informes y la información del cliente final, con manejo conforme a la normativa colombiana de protección de datos personales y a las consideraciones éticas aplicables al manejo de información etnográfica de comunidades indígenas.
+•	Propiedad intelectual: transferencia del código fuente y configuraciones al cliente final al cierre de la fase de implementación, con licencia perpetua.
+•	Reproducibilidad metodológica: compromiso explícito de que los resultados de los análisis SIG producidos por el motor coincidan con los producidos por el método actual sobre el mismo corpus, validado durante la semana 4 de la implementación.
+Se incluyen cláusulas de salida limpia con migración asistida en caso de terminación anticipada, así como mecanismos de escalación documentados ante incumplimientos sostenidos de los SLAs.
+
+
+Eduwin Andrés Flórez Orejuela — CTO Simonky S.A.S — Bucaramanga, Colombia
