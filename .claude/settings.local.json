@@ -3,7 +3,10 @@
     "allow": [
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\Trabajo\\\\cabildo\\\\CABILDO INDIGENA MUINA\" -Recurse)",
       "Bash(Select-Object FullName, Extension, Length)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\Trabajo\\\\cabildo\\\\CABILDO INDIGENA MUINA\\\\FASE 2\" -Recurse -File -Filter \"*.md\")",
+      "Bash(Select-Object FullName)",
+      "Bash(dir C:\\\\Users\\\\Lenovo\\\\Documents\\\\Trabajo\\\\cabildo\\\\CABILDO INDIGENA MUINA\\\\DOCUMENTACION *)"
     ]
   }
 }
