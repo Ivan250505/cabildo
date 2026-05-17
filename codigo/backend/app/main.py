@@ -24,25 +24,20 @@ logging.basicConfig(
 )
 
 
-_PATCH_ENUM_SQL = """
-DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_enum
-        WHERE enumlabel = 'otro'
-          AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'corpus_tipo')
-    ) THEN
-        ALTER TYPE corpus_tipo ADD VALUE 'otro';
-    END IF;
-END $$;
-"""
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Crear tablas que no existan
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Añade 'otro' al enum corpus_tipo si la BD ya existía sin él
-        await conn.execute(text(_PATCH_ENUM_SQL))
+
+    # ALTER TYPE ADD VALUE no puede correr dentro de una transacción en PostgreSQL;
+    # necesita AUTOCOMMIT. Se ejecuta en una conexión separada.
+    async with engine.connect() as conn:
+        await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await conn.execute(text(
+            "ALTER TYPE corpus_tipo ADD VALUE IF NOT EXISTS 'otro'"
+        ))
+
     yield
     await engine.dispose()
 
