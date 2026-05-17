@@ -92,6 +92,32 @@ def _extract_folder_id(url: str) -> str | None:
     return match.group(1) if match else None
 
 
+_FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+def _list_folder_recursive(
+    service, folder_id: str, rel_path: str = ""
+) -> list[tuple[dict, str]]:
+    """Recursively list all downloadable files inside a Drive folder.
+
+    Returns a flat list of (file_metadata, relative_subfolder_path) tuples.
+    Subfolders are traversed but not included in the result.
+    """
+    query = f"'{folder_id}' in parents and trashed = false"
+    fields = "files(id,name,mimeType,size,modifiedTime)"
+    result = service.files().list(q=query, fields=fields, pageSize=500).execute()
+    items = result.get("files", [])
+
+    files: list[tuple[dict, str]] = []
+    for item in items:
+        if item["mimeType"] == _FOLDER_MIME:
+            child_rel = f"{rel_path}/{item['name']}" if rel_path else item["name"]
+            files.extend(_list_folder_recursive(service, item["id"], child_rel))
+        else:
+            files.append((item, rel_path))
+    return files
+
+
 def _get_user_or_raise(user: User) -> dict:
     if not user.google_token:
         raise HTTPException(
@@ -280,12 +306,7 @@ async def sync_study(
         skipped = 0
 
         try:
-            query = f"'{folder_id}' in parents and trashed = false"
-            fields = "files(id,name,mimeType,size,modifiedTime)"
-            api_result = service.files().list(
-                q=query, fields=fields, pageSize=500
-            ).execute()
-            drive_files = api_result.get("files", [])
+            drive_files = _list_folder_recursive(service, folder_id)
         except HttpError as e:
             sync_results.append(SyncResult(
                 study_id=study_id, fase=fase,
@@ -294,7 +315,7 @@ async def sync_study(
             ))
             continue
 
-        for df in drive_files:
+        for df, rel_path in drive_files:
             mime = df.get("mimeType", "")
             tipo = _MIME_TO_TIPO.get(mime, "otro")
 
@@ -303,7 +324,7 @@ async def sync_study(
             if mime in _EXPORT_EXT and not name.endswith(_EXPORT_EXT[mime]):
                 name += _EXPORT_EXT[mime]
 
-            dest = base_storage / fase / name
+            dest = base_storage / fase / rel_path / name if rel_path else base_storage / fase / name
 
             # Verificar si ya existe en corpus y está descargado
             existing_q = await db.execute(
@@ -363,6 +384,7 @@ async def sync_study(
             files_skipped=skipped,
             errors=errors,
         ))
+
 
     # Actualizar drive_folder_id del estudio con el de FASE1 si no está seteado
     if not study.drive_folder_id:
