@@ -25,6 +25,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
+from jose import jwt as jose_jwt, JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,21 +103,39 @@ def _get_user_or_raise(user: User) -> dict:
 
 # ── OAuth2 ────────────────────────────────────────────────────────────────────
 
-def generate_auth_url() -> tuple[str, str]:
-    """Return (authorization_url, state)."""
+def generate_auth_url(user_id: str) -> tuple[str, str]:
+    """Return (authorization_url, state) with user_id encoded in the state JWT."""
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES)
     flow.redirect_uri = settings.GOOGLE_REDIRECT_URI
-    url, state = flow.authorization_url(
+    # Encode user_id in state so the callback can identify the user without JWT header
+    state = jose_jwt.encode(
+        {"sub": user_id, "type": "drive_oauth"},
+        settings.SECRET_KEY,
+        algorithm="HS256",
+    )
+    url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
+        state=state,
     )
     return url, state
 
 
-async def exchange_code(db: AsyncSession, user: User, code: str, state: str) -> None:
+def decode_oauth_state(state: str) -> str:
+    """Decode the state JWT and return the user_id (str)."""
+    try:
+        payload = jose_jwt.decode(state, settings.SECRET_KEY, algorithms=["HS256"])
+        if payload.get("type") != "drive_oauth":
+            raise ValueError("tipo incorrecto")
+        return payload["sub"]
+    except (JWTError, KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Estado OAuth inválido: {exc}")
+
+
+async def exchange_code(db: AsyncSession, user: User, code: str) -> None:
     """Exchange the OAuth2 authorization code for tokens and store encrypted in DB."""
-    flow = Flow.from_client_config(_client_config(), scopes=SCOPES, state=state)
+    flow = Flow.from_client_config(_client_config(), scopes=SCOPES)
     flow.redirect_uri = settings.GOOGLE_REDIRECT_URI
     flow.fetch_token(code=code)
 
