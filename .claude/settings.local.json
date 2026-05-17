@@ -6,7 +6,13 @@
       "Bash(Format-Table -AutoSize)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\Trabajo\\\\cabildo\\\\CABILDO INDIGENA MUINA\\\\FASE 2\" -Recurse -File -Filter \"*.md\")",
       "Bash(Select-Object FullName)",
-      "Bash(dir C:\\\\Users\\\\Lenovo\\\\Documents\\\\Trabajo\\\\cabildo\\\\CABILDO INDIGENA MUINA\\\\DOCUMENTACION *)"
+      "Bash(dir C:\\\\Users\\\\Lenovo\\\\Documents\\\\Trabajo\\\\cabildo\\\\CABILDO INDIGENA MUINA\\\\DOCUMENTACION *)",
+      "Bash(python -m venv venv)",
+      "Bash(venv\\\\Scripts\\\\python.exe -m pip install --upgrade pip)",
+      "PowerShell(py *)",
+      "PowerShell(cd \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\Trabajo\\\\cabildo\\\\CABILDO INDIGENA MUINA\\\\codigo\\\\backend\"; $env:DATABASE_URL=\"postgresql+asyncpg://user:pass@localhost/etnosig\"; $env:SECRET_KEY=\"dummy-secret-key-for-import-check\"; $env:FERNET_KEY=\"$\\(.\\\\venv\\\\Scripts\\\\python.exe -c \"from cryptography.fernet import Fernet; print\\(Fernet.generate_key\\(\\).decode\\(\\)\\)\"\\)\"; .\\\\venv\\\\Scripts\\\\python.exe -c \"from app.main import app; print\\('OK — routers:', [r.path for r in app.routes if hasattr\\(r,'path'\\)]\\)\" 2>&1)",
+      "PowerShell(cd \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\Trabajo\\\\cabildo\\\\CABILDO INDIGENA MUINA\\\\codigo\\\\backend\"; $secret = .\\\\venv\\\\Scripts\\\\python.exe -c \"import secrets; print\\(secrets.token_hex\\(32\\)\\)\"; $fernet = .\\\\venv\\\\Scripts\\\\python.exe -c \"from cryptography.fernet import Fernet; print\\(Fernet.generate_key\\(\\).decode\\(\\)\\)\"; Write-Output \"SECRET_KEY=$secret\"; Write-Output \"FERNET_KEY=$fernet\")",
+      "PowerShell(npm *)"
     ]
   }
 }
