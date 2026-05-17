@@ -16,8 +16,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.studies.models import CorpusExtraction, Study, StudyCorpus
 from app.documents.extractor import process_document
+from app.documents.ai_extractor import get_ai_extractor
 
 settings = get_settings()
+
+# Construir el extractor de IA una sola vez (None si AI_PROVIDER=none)
+_ai_extractor = get_ai_extractor(
+    provider=settings.AI_PROVIDER,
+    api_key=settings.AI_API_KEY,
+    model=settings.AI_MODEL,
+)
 
 # Extensiones procesables por el extractor de texto
 _PROCESABLES = {".pdf", ".docx", ".doc"}
@@ -100,6 +108,20 @@ async def process_study_corpus(
             continue
 
         entidades = doc_result.get("entidades", [])
+
+        # IA: extracción estructurada adicional si hay proveedor configurado
+        if _ai_extractor:
+            try:
+                ai_ents = _ai_extractor.extract(
+                    text=doc_result.get("texto", ""),
+                    filename=corpus_file.nombre_archivo,
+                )
+                for e in ai_ents:
+                    e["fuente_archivo"] = corpus_file.nombre_archivo
+                entidades = entidades + ai_ents
+            except Exception as e:
+                errores.append(f"[IA] {corpus_file.nombre_archivo}: {e}")
+
         now = datetime.now(timezone.utc)
 
         for ent in entidades:

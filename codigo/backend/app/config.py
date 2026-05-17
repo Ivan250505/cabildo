@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     DEFAULT_BUFFER_METROS: int = 50
 
+    # IA para extracción (claude | openai | gemini | none)
+    AI_PROVIDER: str = "none"
+    AI_API_KEY: str = ""
+    AI_MODEL: str = ""
+
     # Entorno
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "info"
