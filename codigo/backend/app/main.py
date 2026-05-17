@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="EtnoSIG API",
+    title="EtnIA API",
     description="Plataforma de automatización de estudios etnológicos — Simonky S.A.S.",
     version="1.0.0",
     lifespan=lifespan,
