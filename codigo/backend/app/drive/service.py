@@ -55,6 +55,30 @@ _MIME_TO_TIPO: dict[str, str] = {
     "application/octet-stream": "otro",
 }
 
+# Extensión de archivo → tipo de corpus (fallback cuando el MIME no está mapeado)
+_EXT_TO_TIPO: dict[str, str] = {
+    ".pdf": "pdf",
+    ".docx": "docx", ".doc": "docx",
+    ".xlsx": "xlsx", ".xls": "xlsx",
+    ".qgz": "qgz", ".qgs": "qgz",
+    ".gpkg": "gpkg",
+    ".shp": "shp", ".dbf": "shp", ".prj": "shp", ".shx": "shp",
+    ".jpg": "jpg", ".jpeg": "jpg", ".png": "jpg",
+    ".heic": "heic",
+    ".mp4": "mp4", ".mov": "mp4",
+    ".mp3": "mp3", ".m4a": "mp3",
+}
+
+
+def _get_tipo(mime: str, filename: str) -> str:
+    """Resolve corpus tipo from MIME type, with file-extension fallback."""
+    tipo = _MIME_TO_TIPO.get(mime)
+    if tipo and tipo != "otro":
+        return tipo
+    ext = Path(filename).suffix.lower()
+    return _EXT_TO_TIPO.get(ext, "otro")
+
+
 # MIME de exportación para Google Docs nativos
 _GOOGLE_EXPORT_MIME: dict[str, str] = {
     "application/vnd.google-apps.document": (
@@ -317,7 +341,7 @@ async def sync_study(
 
         for df, rel_path in drive_files:
             mime = df.get("mimeType", "")
-            tipo = _MIME_TO_TIPO.get(mime, "otro")
+            tipo = _get_tipo(mime, df["name"])
 
             # Determinar nombre local con extensión correcta
             name = df["name"]

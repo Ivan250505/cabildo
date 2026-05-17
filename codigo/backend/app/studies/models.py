@@ -11,7 +11,7 @@ STUDY_STATES = (
     "listo_revision", "en_revision", "aprobado", "exportado", "error"
 )
 
-CORPUS_FILE_TYPES = ("pdf", "docx", "xlsx", "qgz", "gpkg", "shp", "jpg", "heic", "mp4", "mp3")
+CORPUS_FILE_TYPES = ("pdf", "docx", "xlsx", "qgz", "gpkg", "shp", "jpg", "heic", "mp4", "mp3", "otro")
 
 CORPUS_ROLES = (
     "solicitud_formal", "reglamento", "acta_eleccion", "acta_posesion",

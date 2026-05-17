@@ -1,5 +1,8 @@
 import { useState } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import IndigenousDivider from '../components/IndigenousDivider'
+import { getStudy } from '../api/studies'
 
 const TOC_ITEMS = [
   { id: 's1', label: '1. Portada institucional', ok: true, warn: false },
@@ -28,16 +31,68 @@ const SECTION_HEADERS: Record<string, string> = {
 }
 
 export default function RevisionPage() {
+  const { id } = useParams<{ id: string }>()
   const [activeSection, setActiveSection] = useState('s1')
+
+  const { data: study, isLoading } = useQuery({
+    queryKey: ['study', id],
+    queryFn: () => getStudy(id!),
+    enabled: !!id,
+  })
+
+  if (isLoading) return <div className="loading-state">Cargando estudio…</div>
+
+  // Si no hay id de estudio, mostrar estado vacío
+  if (!id || !study) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">📄</div>
+        <p>Selecciona un estudio para revisar su informe.</p>
+        <Link to="/estudios" className="btn btn-outline" style={{ marginTop: 16 }}>
+          ← Ver estudios
+        </Link>
+      </div>
+    )
+  }
+
+  // Verificar si el estudio tiene informe listo para revisión
+  const estadosConInforme = ['listo_revision', 'en_revision', 'aprobado', 'exportado']
+  const tieneInforme = estadosConInforme.includes(study.estado)
+
+  if (!tieneInforme) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">⏳</div>
+        <p><strong>{study.nombre_comunidad}</strong></p>
+        <p className="text-sm text-muted" style={{ marginTop: 8 }}>
+          El informe aún no está disponible para revisión.
+          El estudio está en estado <strong>{study.estado}</strong>.
+        </p>
+        <p className="text-sm text-muted">
+          Primero sincroniza el corpus desde Drive y luego genera el informe.
+        </p>
+        <Link to={`/estudios/${id}`} className="btn btn-outline" style={{ marginTop: 16 }}>
+          ← Volver al estudio
+        </Link>
+      </div>
+    )
+  }
+
+  // Informe disponible — mostrar revisor
+  const today = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })
+  const docName = `Informe_${study.nombre_comunidad.replace(/\s+/g, '')}_v1.docx`
 
   return (
     <>
       <div className="flex justify-between items-center mb-4">
         <div>
           <div className="page-title">Revisión del informe</div>
-          <div className="page-sub">Informe_MuruiMuina_v1.docx · Generado hoy 10:08 a.m. · 47 páginas</div>
+          <div className="page-sub">
+            {docName} · Generado {today} · 47 páginas
+          </div>
         </div>
         <div className="flex gap-2">
+          <Link to={`/estudios/${id}`} className="btn btn-outline">← Volver</Link>
           <button className="btn btn-outline">⬇ Descargar borrador .docx</button>
           <button className="btn btn-success btn-lg">✓ Aprobar y exportar versión final</button>
         </div>
@@ -84,16 +139,16 @@ export default function RevisionPage() {
           </div>
 
           <div className="doc-preview">
-            <div className="doc-h1">ESTUDIO ETNOLÓGICO<br />CABILDO INDÍGENA MURUI MUINA</div>
+            <div className="doc-h1">ESTUDIO ETNOLÓGICO<br />{study.nombre_comunidad.toUpperCase()}</div>
             <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginBottom: 20 }}>
-              Ministerio del Interior · Dirección de Asuntos Indígenas · Mayo 2026
+              Ministerio del Interior · Dirección de Asuntos Indígenas · {today}
             </div>
 
             <IndigenousDivider patternId="doc-revision-div" variant="wayuu" />
 
             <div className="doc-h2">6.1 Validación de discrepancias entre fuentes poblacionales</div>
             <p className="doc-p">
-              Con el fin de garantizar la consistencia de la información demográfica del Cabildo Indígena Murui Muina,
+              Con el fin de garantizar la consistencia de la información demográfica de {study.nombre_comunidad},
               el sistema realizó el cruce automático de las cuatro fuentes disponibles en el corpus:
             </p>
 
@@ -130,9 +185,9 @@ export default function RevisionPage() {
 
             <div className="doc-h2">6.2 Cruce con datos abiertos del DANE</div>
             <p className="doc-p">
-              Según el Censo Nacional de Población y Vivienda 2018 (DANE), el municipio de Florencia — Caquetá registra
-              una población total de 175.747 habitantes, de los cuales el 2,4% se autoreconocen como indígenas (4.217 personas).
-              El cabildo Murui Muina representa aproximadamente el 2,3% de la población indígena censada en el municipio.
+              Según el Censo Nacional de Población y Vivienda 2018 (DANE), el municipio de {study.municipio} — {study.departamento} registra
+              una población registrada. El cabildo {study.nombre_comunidad} pertenece al pueblo {study.pueblo_indigena ?? 'indígena'} y
+              se encuentra en proceso de reconocimiento formal ante la DAIRM del Ministerio del Interior.
             </p>
           </div>
         </div>

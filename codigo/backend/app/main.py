@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config import get_settings
 from app.database import engine, Base
@@ -23,12 +24,25 @@ logging.basicConfig(
 )
 
 
+_PATCH_ENUM_SQL = """
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum
+        WHERE enumlabel = 'otro'
+          AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'corpus_tipo')
+    ) THEN
+        ALTER TYPE corpus_tipo ADD VALUE 'otro';
+    END IF;
+END $$;
+"""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # En desarrollo crea las tablas automáticamente.
-    # En producción se usa Alembic: `alembic upgrade head`
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Añade 'otro' al enum corpus_tipo si la BD ya existía sin él
+        await conn.execute(text(_PATCH_ENUM_SQL))
     yield
     await engine.dispose()
 
