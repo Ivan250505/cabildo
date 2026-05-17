@@ -1,5 +1,5 @@
 import client from './client'
-import type { Study, StudyDetail, StudyListResponse } from '../types'
+import type { Study, StudyDetail, StudyListResponse, Report } from '../types'
 
 export async function getStudies(params?: {
   estado?: string
@@ -49,4 +49,29 @@ export async function getCorpusFiles(studyId: string) {
 export async function transitionStudy(studyId: string, estado: Study['estado']): Promise<StudyDetail> {
   const { data } = await client.post<StudyDetail>(`studies/${studyId}/transition`, { estado })
   return data
+}
+
+export async function getReports(studyId: string): Promise<Report[]> {
+  const { data } = await client.get<Report[]>(`studies/${studyId}/reports`)
+  return data
+}
+
+export async function generateReport(studyId: string): Promise<Report> {
+  const { data } = await client.post<Report>(`studies/${studyId}/reports`)
+  return data
+}
+
+export async function approveReport(studyId: string, reportId: string): Promise<Report> {
+  const { data } = await client.post<Report>(`studies/${studyId}/reports/${reportId}/approve`)
+  return data
+}
+
+export async function downloadReportBlob(studyId: string, reportId: string): Promise<{ blob: Blob; filename: string }> {
+  const response = await client.get(`studies/${studyId}/reports/${reportId}/download`, {
+    responseType: 'blob',
+  })
+  const disposition = response.headers['content-disposition'] ?? ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  const filename = match ? match[1] : `informe_${studyId}.docx`
+  return { blob: response.data as Blob, filename }
 }

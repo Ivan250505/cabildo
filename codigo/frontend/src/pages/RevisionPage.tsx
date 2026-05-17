@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import IndigenousDivider from '../components/IndigenousDivider'
 import { getStudy } from '../api/studies'
+import { getReports, generateReport, approveReport, downloadReportBlob } from '../api/studies'
+import type { Report } from '../types'
 
 const TOC_ITEMS = [
   { id: 's1', label: '1. Portada institucional', ok: true, warn: false },
@@ -30,9 +32,16 @@ const SECTION_HEADERS: Record<string, string> = {
   s6a: '6. Módulos de valor agregado',
 }
 
+function latestReport(reports: Report[]): Report | null {
+  if (!reports.length) return null
+  return reports.reduce((a, b) => (a.version > b.version ? a : b))
+}
+
 export default function RevisionPage() {
   const { id } = useParams<{ id: string }>()
   const [activeSection, setActiveSection] = useState('s1')
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   const { data: study, isLoading } = useQuery({
     queryKey: ['study', id],
@@ -40,9 +49,45 @@ export default function RevisionPage() {
     enabled: !!id,
   })
 
-  if (isLoading) return <div className="loading-state">Cargando estudio…</div>
+  const { data: reports = [], isLoading: reportsLoading } = useQuery({
+    queryKey: ['reports', id],
+    queryFn: () => getReports(id!),
+    enabled: !!id && !!study,
+  })
 
-  // Si no hay id de estudio, mostrar estado vacío
+  const generateMutation = useMutation({
+    mutationFn: () => generateReport(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports', id] })
+      queryClient.invalidateQueries({ queryKey: ['study', id] })
+    },
+  })
+
+  const approveMutation = useMutation({
+    mutationFn: (reportId: string) => approveReport(id!, reportId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports', id] })
+      queryClient.invalidateQueries({ queryKey: ['study', id] })
+    },
+  })
+
+  const handleDownload = async (report: Report) => {
+    setDownloadError(null)
+    try {
+      const { blob, filename } = await downloadReportBlob(id!, report.id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setDownloadError('No se pudo descargar el archivo. Intenta de nuevo.')
+    }
+  }
+
+  if (isLoading || reportsLoading) return <div className="loading-state">Cargando estudio…</div>
+
   if (!id || !study) {
     return (
       <div className="empty-state">
@@ -55,7 +100,6 @@ export default function RevisionPage() {
     )
   }
 
-  // Verificar si el estudio tiene informe listo para revisión
   const estadosConInforme = ['listo_revision', 'en_revision', 'aprobado', 'exportado']
   const tieneInforme = estadosConInforme.includes(study.estado)
 
@@ -78,9 +122,39 @@ export default function RevisionPage() {
     )
   }
 
-  // Informe disponible — mostrar revisor
+  const report = latestReport(reports)
+
+  if (!report) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">📝</div>
+        <p><strong>{study.nombre_comunidad}</strong></p>
+        <p className="text-sm text-muted" style={{ marginTop: 8 }}>
+          El estudio está listo pero aún no se ha generado el informe Word.
+        </p>
+        {generateMutation.isError && (
+          <div className="alert alert-danger" style={{ marginTop: 12 }}>
+            Error al generar el informe. Intenta de nuevo.
+          </div>
+        )}
+        <button
+          className="btn btn-primary"
+          style={{ marginTop: 16 }}
+          disabled={generateMutation.isPending}
+          onClick={() => generateMutation.mutate()}
+        >
+          {generateMutation.isPending ? 'Generando…' : 'Generar informe'}
+        </button>
+        <Link to={`/estudios/${id}`} className="btn btn-outline" style={{ marginTop: 8 }}>
+          ← Volver al estudio
+        </Link>
+      </div>
+    )
+  }
+
   const today = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })
-  const docName = `Informe_${study.nombre_comunidad.replace(/\s+/g, '')}_v1.docx`
+  const docName = `Informe_${study.nombre_comunidad.replace(/\s+/g, '')}_v${report.version}.docx`
+  const yaAprobado = report.estado === 'aprobado' || report.estado === 'exportado'
 
   return (
     <>
@@ -88,15 +162,45 @@ export default function RevisionPage() {
         <div>
           <div className="page-title">Revisión del informe</div>
           <div className="page-sub">
-            {docName} · Generado {today} · 47 páginas
+            {docName} · Generado {today} · v{report.version}
+            {yaAprobado && <span className="badge badge-success" style={{ marginLeft: 8 }}>Aprobado</span>}
           </div>
         </div>
         <div className="flex gap-2">
           <Link to={`/estudios/${id}`} className="btn btn-outline">← Volver</Link>
-          <button className="btn btn-outline">⬇ Descargar borrador .docx</button>
-          <button className="btn btn-success btn-lg">✓ Aprobar y exportar versión final</button>
+
+          <button
+            className="btn btn-outline"
+            onClick={() => handleDownload(report)}
+          >
+            ⬇ Descargar borrador .docx
+          </button>
+
+          {!yaAprobado && (
+            <button
+              className="btn btn-success btn-lg"
+              disabled={approveMutation.isPending}
+              onClick={() => approveMutation.mutate(report.id)}
+            >
+              {approveMutation.isPending ? 'Aprobando…' : '✓ Aprobar y exportar versión final'}
+            </button>
+          )}
         </div>
       </div>
+
+      {downloadError && (
+        <div className="alert alert-danger" style={{ marginBottom: 12 }}>{downloadError}</div>
+      )}
+      {approveMutation.isError && (
+        <div className="alert alert-danger" style={{ marginBottom: 12 }}>
+          Error al aprobar el informe. Intenta de nuevo.
+        </div>
+      )}
+      {approveMutation.isSuccess && (
+        <div className="alert alert-success" style={{ marginBottom: 12 }}>
+          Informe aprobado correctamente.
+        </div>
+      )}
 
       <div className="col-left-sm">
         {/* TOC */}

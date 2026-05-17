@@ -62,3 +62,22 @@ export interface AuthResponse {
   expires_in: number
   user: BackendUser
 }
+
+export type ReportEstado = 'generando' | 'listo_revision' | 'en_revision' | 'aprobado' | 'exportado' | 'error'
+
+export interface Report {
+  id: string
+  study_id: string
+  version: number
+  estado: ReportEstado
+  archivo_docx: string | null
+  archivo_zip: string | null
+  hash_docx: string | null
+  generado_por: string | null
+  aprobado_por: string | null
+  parametros: Record<string, unknown> | null
+  error_msg: string | null
+  generado_en: string
+  aprobado_en: string | null
+  exportado_en: string | null
+}
