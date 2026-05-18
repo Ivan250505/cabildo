@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getStudy, getCorpusFiles, processCorpus, runGisAnalysis, generateReport } from '../api/studies'
+import { getStudy, getCorpusFiles, processCorpus, runGisAnalysis, generateReport, getReports } from '../api/studies'
+import type { StudyDetail } from '../types'
+import type { Report } from '../types'
 
 type GenStep = 'idle' | 'extracting' | 'gis' | 'writing' | 'done' | 'error'
 
@@ -60,41 +62,74 @@ export default function GenerarPage() {
 
   const canGenerate = tieneCorpus && step === 'idle' && !['procesando', 'sincronizando'].includes(study.estado)
 
+  async function pollStudy(
+    until: (s: StudyDetail) => boolean,
+    timeout = 300_000,
+  ): Promise<StudyDetail> {
+    const deadline = Date.now() + timeout
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 3000))
+      const s = await getStudy(id!)
+      if (s.estado === 'error') throw new Error(s.error_msg ?? 'Error procesando estudio')
+      if (until(s)) return s
+    }
+    throw new Error('Tiempo de espera agotado')
+  }
+
+  async function pollReport(reportId: string, timeout = 300_000): Promise<Report> {
+    const deadline = Date.now() + timeout
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 3000))
+      const reports = await getReports(id!)
+      const r = reports.find(rep => rep.id === reportId)
+      if (!r) continue
+      if (r.estado === 'listo_revision' || r.estado === 'aprobado') return r
+      if (r.estado === 'error') throw new Error(r.error_msg ?? 'Error generando informe')
+    }
+    throw new Error('Tiempo de espera agotado generando informe')
+  }
+
   async function handleGenerate() {
     setStep('extracting')
     setErrorMsg(null)
     setStepDetails({})
 
     try {
-      // Paso 1: Extracción documental (NLP + IA)
-      const extractResult = await processCorpus(id!, false)
+      // Paso 1: Extracción documental (202 inmediato → polling hasta corpus_ok)
+      await processCorpus(id!, false)
+      const afterExtract = await pollStudy(
+        s => !['procesando', 'sincronizando'].includes(s.estado),
+      )
       setStepDetails(prev => ({
         ...prev,
-        extracting: `${extractResult.archivos_procesados ?? 0} archivos · ${extractResult.entidades_extraidas ?? 0} datos extraídos`,
+        extracting: afterExtract.estado === 'corpus_ok'
+          ? 'Corpus procesado correctamente'
+          : `Estado: ${afterExtract.estado}`,
       }))
 
-      // Paso 2: Análisis SIG (solo si hay GPKGs)
+      // Paso 2: Análisis SIG (202 inmediato → polling hasta que salga de procesando)
       setStep('gis')
       if (tieneGpkg) {
-        try {
-          const gisResult = await runGisAnalysis(id!)
-          setStepDetails(prev => ({
-            ...prev,
-            gis: `${gisResult.capas_analizadas?.length ?? 0} capas · ${gisResult.resultados_guardados ?? 0} resultados`,
-          }))
-        } catch {
-          setStepDetails(prev => ({ ...prev, gis: 'Omitido (sin capas SIG disponibles)' }))
-        }
+        await runGisAnalysis(id!)
+        const afterGis = await pollStudy(
+          s => !['procesando'].includes(s.estado),
+        )
+        const omitido = afterGis.estado === 'corpus_ok'
+        setStepDetails(prev => ({
+          ...prev,
+          gis: omitido ? 'Omitido (sin capas SIG disponibles)' : 'Análisis SIG completado',
+        }))
       } else {
         setStepDetails(prev => ({ ...prev, gis: 'Omitido (sin archivos GPKG en corpus)' }))
       }
 
-      // Paso 3: Generación del informe con IA
+      // Paso 3: Generación del informe (202 inmediato → polling hasta listo_revision)
       setStep('writing')
-      const report = await generateReport(id!)
+      const pendingReport = await generateReport(id!)
+      const finalReport = await pollReport(pendingReport.id)
       setStepDetails(prev => ({
         ...prev,
-        writing: `Informe v${report.version} generado`,
+        writing: `Informe v${finalReport.version} generado`,
       }))
 
       setStep('done')

@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.database import AsyncSessionLocal
 from app.studies.models import (
     CorpusExtraction, GISResult, Report, Study, StudyCorpus
 )
@@ -45,7 +46,7 @@ async def _next_version(db: AsyncSession, study_id: UUID) -> int:
     return (last.version + 1) if last else 1
 
 
-# ── Recopilación de datos para el informe ─────────────────────────────────────
+# ── Recopilación de datos ─────────────────────────────────────────────────────
 
 async def _gather_extracciones(db: AsyncSession, study_id: UUID) -> list[dict]:
     result = await db.execute(
@@ -81,98 +82,34 @@ def _load_map_png(archivo_path: str | None) -> bytes | None:
     if not archivo_path:
         return None
     p = Path(archivo_path)
-    if p.exists():
-        return p.read_bytes()
-    return None
+    return p.read_bytes() if p.exists() else None
 
 
-# ── Generación del informe ────────────────────────────────────────────────────
+# ── Paso 1: crear registro Report (síncrono, en el request) ──────────────────
 
-async def generate_report(
+async def start_report(
     db: AsyncSession,
     study_id: UUID,
     generado_por: UUID,
-    parametros: dict | None = None,
 ) -> Report:
     """
-    Genera el informe Word de un estudio y crea el registro Report en BD.
-    El estudio debe estar en estado 'listo_revision' o 'en_revision'.
+    Valida el estudio y crea el registro Report con estado='generando'.
+    El trabajo real lo hace build_report_bg() en background.
     """
     study = await _get_study_or_404(db, study_id)
 
-    if study.estado not in ("listo_revision", "en_revision", "corpus_ok"):
+    if study.estado not in ("listo_revision", "en_revision", "corpus_ok", "procesando"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"No se puede generar el informe en estado '{study.estado}'.",
         )
 
-    # Recopilar datos
-    extracciones = await _gather_extracciones(db, study_id)
-    gis_results = await _gather_gis_results(db, study_id)
-
-    # Cargar imágenes de mapas desde disco
-    mapa_general_png: bytes | None = None
-    mapas_por_capa: dict[str, bytes] = {}
-
-    for gr in gis_results:
-        tipo = gr.get("tipo_resultado", "")
-        png = _load_map_png(gr.get("archivo_path"))
-        if png:
-            if tipo == "mapa_general":
-                mapa_general_png = png
-            elif tipo.startswith("mapa_capa_"):
-                nombre_capa = tipo.replace("mapa_capa_", "")
-                mapas_por_capa[nombre_capa] = png
-
-    # Construir el Word
-    study_dict = {
-        "nombre_comunidad": study.nombre_comunidad,
-        "pueblo_indigena": study.pueblo_indigena,
-        "municipio": study.municipio,
-        "departamento": study.departamento,
-        "vereda": study.vereda,
-        "nit_comunidad": study.nit_comunidad,
-        "contrato_referencia": study.contrato_referencia,
-        "notas_adicionales": study.notas_adicionales,
-        "buffer_metros": study.buffer_metros,
-    }
-
-    # IA: generar texto narrativo de las secciones del informe
-    ai_content = generate_sections(
-        study_data=study_dict,
-        extracciones=extracciones,
-        provider=settings.AI_PROVIDER,
-        api_key=settings.AI_API_KEY,
-        model=settings.AI_MODEL,
-    )
-
-    docx_bytes = build_report(
-        study_data=study_dict,
-        extracciones=extracciones,
-        gis_results=gis_results,
-        mapa_general_png=mapa_general_png,
-        mapas_por_capa_png=mapas_por_capa if mapas_por_capa else None,
-        ai_content=ai_content,
-    )
-
-    # Guardar en disco
     version = await _next_version(db, study_id)
-    out_dir = Path(settings.FILES_BASE_PATH) / str(study_id) / "reports"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = f"Informe_{study.nombre_comunidad.replace(' ', '_')}_v{version}.docx"
-    out_path = out_dir / filename
-    out_path.write_bytes(docx_bytes)
-
-    # Crear registro en BD
     report = Report(
         study_id=study_id,
         version=version,
-        estado="listo_revision",
-        archivo_docx=str(out_path),
-        hash_docx=_sha256(docx_bytes),
+        estado="generando",
         generado_por=generado_por,
-        parametros=parametros or {},
         generado_en=datetime.now(timezone.utc),
     )
     db.add(report)
@@ -181,10 +118,93 @@ async def generate_report(
     return report
 
 
+# ── Paso 2: construir el Word (background task) ───────────────────────────────
+
+async def build_report_bg(study_id: UUID, report_id: UUID) -> None:
+    """
+    Corre en BackgroundTask. Genera el Word, actualiza el Report en BD.
+    Usa su propia sesión de BD (la del request ya está cerrada).
+    """
+    async with AsyncSessionLocal() as db:
+        try:
+            report = await db.get(Report, report_id)
+            study = await db.get(Study, study_id)
+            if not report or not study:
+                return
+
+            extracciones = await _gather_extracciones(db, study_id)
+            gis_results = await _gather_gis_results(db, study_id)
+
+            mapa_general_png: bytes | None = None
+            mapas_por_capa: dict[str, bytes] = {}
+            for gr in gis_results:
+                tipo = gr.get("tipo_resultado", "")
+                png = _load_map_png(gr.get("archivo_path"))
+                if png:
+                    if tipo == "mapa_general":
+                        mapa_general_png = png
+                    elif tipo.startswith("mapa_capa_"):
+                        mapas_por_capa[tipo.replace("mapa_capa_", "")] = png
+
+            study_dict = {
+                "nombre_comunidad": study.nombre_comunidad,
+                "pueblo_indigena": study.pueblo_indigena,
+                "municipio": study.municipio,
+                "departamento": study.departamento,
+                "vereda": study.vereda,
+                "nit_comunidad": study.nit_comunidad,
+                "contrato_referencia": study.contrato_referencia,
+                "notas_adicionales": study.notas_adicionales,
+                "buffer_metros": study.buffer_metros,
+            }
+
+            ai_content = generate_sections(
+                study_data=study_dict,
+                extracciones=extracciones,
+                provider=settings.AI_PROVIDER,
+                api_key=settings.AI_API_KEY,
+                model=settings.AI_MODEL,
+            )
+
+            docx_bytes = build_report(
+                study_data=study_dict,
+                extracciones=extracciones,
+                gis_results=gis_results,
+                mapa_general_png=mapa_general_png,
+                mapas_por_capa_png=mapas_por_capa if mapas_por_capa else None,
+                ai_content=ai_content,
+            )
+
+            out_dir = Path(settings.FILES_BASE_PATH) / str(study_id) / "reports"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"Informe_{study.nombre_comunidad.replace(' ', '_')}_v{report.version}.docx"
+            out_path = out_dir / filename
+            out_path.write_bytes(docx_bytes)
+
+            report.estado = "listo_revision"
+            report.archivo_docx = str(out_path)
+            report.hash_docx = _sha256(docx_bytes)
+
+            if study.estado not in ("aprobado", "exportado"):
+                study.estado = "listo_revision"
+
+            await db.commit()
+
+        except Exception as exc:
+            await db.rollback()
+            async with AsyncSessionLocal() as db2:
+                report2 = await db2.get(Report, report_id)
+                if report2:
+                    report2.estado = "error"
+                    report2.error_msg = str(exc)[:500]
+                    await db2.commit()
+
+
+# ── Aprobar / descargar ───────────────────────────────────────────────────────
+
 async def approve_report(
     db: AsyncSession, study_id: UUID, report_id: UUID, aprobado_por: UUID
 ) -> Report:
-    """Marca el informe como aprobado y actualiza el estado del estudio."""
     result = await db.execute(
         select(Report).where(Report.id == report_id, Report.study_id == study_id)
     )
@@ -201,7 +221,6 @@ async def approve_report(
     report.aprobado_por = aprobado_por
     report.aprobado_en = datetime.now(timezone.utc)
 
-    # Actualizar estado del estudio
     study = await _get_study_or_404(db, study_id)
     study.estado = "aprobado"
 
@@ -211,7 +230,6 @@ async def approve_report(
 
 
 async def get_report_bytes(db: AsyncSession, study_id: UUID, report_id: UUID) -> tuple[bytes, str]:
-    """Retorna (bytes del .docx, nombre del archivo) para descarga."""
     result = await db.execute(
         select(Report).where(Report.id == report_id, Report.study_id == study_id)
     )
@@ -224,3 +242,10 @@ async def get_report_bytes(db: AsyncSession, study_id: UUID, report_id: UUID) ->
         raise HTTPException(status_code=404, detail="Archivo del informe no encontrado en disco")
 
     return path.read_bytes(), path.name
+
+
+async def list_reports(db: AsyncSession, study_id: UUID) -> list[Report]:
+    result = await db.execute(
+        select(Report).where(Report.study_id == study_id).order_by(Report.version.desc())
+    )
+    return list(result.scalars().all())

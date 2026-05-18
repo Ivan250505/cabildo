@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,20 +12,31 @@ from app.studies.schemas import ReportResponse
 router = APIRouter(prefix="/api/studies/{study_id}/reports", tags=["reports"])
 
 
-@router.post("", response_model=ReportResponse, status_code=201)
+@router.get("", response_model=list[ReportResponse])
+async def list_reports(
+    study_id: UUID,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista todos los informes de un estudio, ordenados por versión descendente."""
+    reports = await service.list_reports(db, study_id)
+    return [ReportResponse.model_validate(r) for r in reports]
+
+
+@router.post("", response_model=ReportResponse, status_code=202)
 async def generate_report(
     study_id: UUID,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_tecnico),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Genera el informe Word del estudio.
-    El estudio debe estar en estado 'corpus_ok', 'listo_revision' o 'en_revision'.
+    Inicia la generación del informe Word en segundo plano.
+    Devuelve 202 con el Report en estado 'generando'. Seguir el progreso via GET /reports.
     """
-    report = await service.generate_report(
-        db, study_id, generado_por=current_user.id
-    )
+    report = await service.start_report(db, study_id, generado_por=current_user.id)
     await db.commit()
+    background_tasks.add_task(service.build_report_bg, study_id, report.id)
     return ReportResponse.model_validate(report)
 
 
