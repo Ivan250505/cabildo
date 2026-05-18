@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MapContainer, TileLayer, CircleMarker, LayerGroup, Popup } from 'react-leaflet'
 import IndigenousDivider from '../components/IndigenousDivider'
-import { getStudy, getCorpusFiles, updateStudy } from '../api/studies'
+import { getStudy, getCorpusFiles, updateStudy, getGisGeojson } from '../api/studies'
 import { getDriveStatus, getDriveAuthUrl, syncStudy, type StudySyncResponse } from '../api/drive'
 import { ESTADO_LABEL, ESTADO_BADGE } from './estadoUtils'
 import type { StudyEstado } from '../types'
@@ -15,13 +15,6 @@ const TIPO_ICON: Record<string, string> = {
   shp: '📐', jpg: '🖼', heic: '🖼', mp4: '🎬', mp3: '🎙',
 }
 
-/* Demo SIG points used until real GIS processing is done */
-const DEMO_LAYERS = [
-  { name: 'Prácticas Culturales', color: '#B22222', points: [[1.618,-75.611],[1.612,-75.607],[1.622,-75.614]] as [number,number][] },
-  { name: 'Expresiones Simbólicas', color: '#16a34a', points: [[1.620,-75.603],[1.614,-75.600],[1.617,-75.608]] as [number,number][] },
-  { name: 'Entornos Territoriales', color: '#C8922A', points: [[1.607,-75.610],[1.613,-75.602],[1.621,-75.619]] as [number,number][] },
-  { name: 'Procesos Organizativos', color: '#1A3A5C', points: [[1.615,-75.613],[1.619,-75.601],[1.623,-75.610]] as [number,number][] },
-]
 
 export default function DetallePage() {
   const { id } = useParams<{ id: string }>()
@@ -47,6 +40,13 @@ export default function DetallePage() {
   const { data: driveStatus } = useQuery({
     queryKey: ['drive-status'],
     queryFn: getDriveStatus,
+    retry: false,
+  })
+
+  const { data: geojson } = useQuery({
+    queryKey: ['gis-geojson', id],
+    queryFn: () => getGisGeojson(id!),
+    enabled: !!id,
     retry: false,
   })
 
@@ -266,38 +266,83 @@ export default function DetallePage() {
 
           <div className="card">
             <div className="card-header">
-              <span className="section-title" style={{ margin: 0 }}>Mapa SIG — {study.municipio}, {study.departamento}</span>
+              <span className="section-title" style={{ margin: 0 }}>
+                Mapa SIG — {study.municipio}, {study.departamento}
+              </span>
+              {geojson && geojson.metadata.total_puntos > 0 && (
+                <span className="text-sm text-muted">{geojson.metadata.total_puntos} puntos · {geojson.metadata.capas.length} capas</span>
+              )}
             </div>
             <div className="card-body">
-              <div className="map-container">
-                <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; OpenStreetMap'
-                  />
-                  {DEMO_LAYERS.map((layer) => (
-                    <LayerGroup key={layer.name}>
-                      {layer.points.map((pos, i) => (
-                        <CircleMarker key={i} center={pos} radius={7}
-                          pathOptions={{ color: layer.color, fillColor: layer.color, fillOpacity: 0.75, weight: 1.5 }}>
-                          <Popup><strong>{layer.name}</strong><br />Punto {i + 1}</Popup>
-                        </CircleMarker>
+              {geojson && geojson.features.length > 0 ? (() => {
+                // Calcular centroide real de los puntos
+                const lats = geojson.features.map(f => f.geometry.coordinates[1])
+                const lngs = geojson.features.map(f => f.geometry.coordinates[0])
+                const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length
+                const centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length
+                const realCenter: [number, number] = [centerLat, centerLng]
+
+                // Agrupar por capa para la leyenda
+                const capas: Record<string, string> = {}
+                geojson.features.forEach(f => { capas[f.properties.capa_label] = f.properties.color })
+
+                return (
+                  <>
+                    <div className="map-container">
+                      {/* @ts-ignore — react-leaflet props */}
+                      <MapContainer center={realCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
+                        {/* @ts-ignore */}
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
+                        {geojson.features.map((feature, i) => {
+                          const [lng, lat] = feature.geometry.coordinates
+                          const pos: [number, number] = [lat, lng]
+                          const props = feature.properties
+                          const popupAttrs = Object.entries(props)
+                            .filter(([k]) => !['capa', 'capa_label', 'color', 'study_id', 'comunidad'].includes(k))
+                            .slice(0, 5)
+                          return (
+                            // @ts-ignore
+                            <CircleMarker key={i} center={pos} radius={7}
+                              pathOptions={{ color: props.color, fillColor: props.color, fillOpacity: 0.8, weight: 1.5 }}>
+                              <Popup>
+                                <strong>{props.capa_label}</strong>
+                                {popupAttrs.map(([k, v]) => (
+                                  <div key={k} style={{ fontSize: 11 }}>{k}: {String(v)}</div>
+                                ))}
+                                <div style={{ fontSize: 10, color: '#888', marginTop: 4 }}>{lat.toFixed(6)}, {lng.toFixed(6)}</div>
+                              </Popup>
+                            </CircleMarker>
+                          )
+                        })}
+                      </MapContainer>
+                    </div>
+                    <div className="map-legend">
+                      {Object.entries(capas).map(([label, color]) => (
+                        <div className="map-legend-item" key={label}>
+                          <div className="map-legend-dot" style={{ background: color }} />
+                          {label}
+                        </div>
                       ))}
-                    </LayerGroup>
-                  ))}
-                </MapContainer>
-              </div>
-              <div className="map-legend">
-                {DEMO_LAYERS.map((l) => (
-                  <div className="map-legend-item" key={l.name}>
-                    <div className="map-legend-dot" style={{ background: l.color }} />
-                    {l.name}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                      Sistema: WGS84 · Centro: {centerLat.toFixed(4)}, {centerLng.toFixed(4)}
+                    </div>
+                  </>
+                )
+              })() : (
+                <>
+                  <div className="map-container">
+                    {/* @ts-ignore */}
+                    <MapContainer center={mapCenter} zoom={12} style={{ height: '100%', width: '100%' }}>
+                      {/* @ts-ignore */}
+                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
+                    </MapContainer>
                   </div>
-                ))}
-              </div>
-              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                Datos de demostración · Sistema: WGS84 · {mapCenter[0].toFixed(4)}, {mapCenter[1].toFixed(4)}
-              </div>
+                  <div className="alert alert-info" style={{ marginTop: 8, fontSize: 12 }}>
+                    Sin datos SIG disponibles. Sincroniza el corpus con archivos .gpkg y ejecuta el análisis SIG desde Generar informe.
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

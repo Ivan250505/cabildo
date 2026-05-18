@@ -51,6 +51,23 @@ export async function transitionStudy(studyId: string, estado: Study['estado']):
   return data
 }
 
+export interface GisFeature {
+  type: 'Feature'
+  geometry: { type: 'Point'; coordinates: [number, number] }
+  properties: { capa: string; capa_label: string; color: string; [key: string]: unknown }
+}
+
+export interface GisGeojson {
+  type: 'FeatureCollection'
+  features: GisFeature[]
+  metadata: { total_puntos: number; capas: string[]; nombre_comunidad: string }
+}
+
+export async function getGisGeojson(studyId: string): Promise<GisGeojson> {
+  const { data } = await client.get<GisGeojson>(`studies/${studyId}/gis/geojson`)
+  return data
+}
+
 export async function processCorpus(studyId: string, reprocess = false) {
   const { data } = await client.post(`studies/${studyId}/documents/process`, null, {
     params: { reprocess },
