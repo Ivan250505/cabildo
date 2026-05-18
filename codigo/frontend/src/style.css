@@ -398,6 +398,10 @@ tbody tr:hover { background: #F0EDE6; }
 
 /* ─── Progress bar anim ──────────────────────────────── */
 @keyframes grow { from { width: 0; } }
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
 
 /* ─── Footer ──────────────────────────────────────────── */
 .app-footer { background: var(--navy); color: rgba(255,255,255,0.6); text-align: center; padding: 12px 24px; font-size: 11px; border-top: 2px solid var(--gold); }

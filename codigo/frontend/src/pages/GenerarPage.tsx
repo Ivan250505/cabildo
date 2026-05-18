@@ -428,23 +428,53 @@ export default function GenerarPage() {
               </div>
             )}
 
-            {step !== 'idle' && step !== 'error' && step !== 'done' && (
-              <div style={{ marginTop: 16 }}>
-                <div className="progress-bar-wrap" style={{ height: 6 }}>
-                  <div
-                    className="progress-bar"
-                    style={{
-                      width: step === 'extracting' ? '33%' : step === 'gis' ? '66%' : '90%',
-                      transition: 'width 0.5s ease',
-                    }}
-                  />
+            {step !== 'idle' && step !== 'error' && step !== 'done' && (() => {
+              // Progreso basado en tiempo: cada paso tiene una ventana estimada de ~4 min
+              // Total estimado: 12 min (720s). La barra nunca pasa de 95%.
+              const STEP_START: Record<string, number> = { extracting: 0, gis: 30, writing: 60 }
+              const STEP_END:   Record<string, number> = { extracting: 28, gis: 58, writing: 93 }
+              const STEP_DUR  = 240 // segundos estimados por paso
+              const base  = STEP_START[step] ?? 0
+              const top   = STEP_END[step]   ?? 93
+              const ratio = Math.min(elapsed / STEP_DUR, 1)
+              // easing suave: sube rápido al inicio y se frena cerca del tope
+              const eased = 1 - Math.pow(1 - ratio, 3)
+              const pct   = Math.min(base + (top - base) * eased, 95)
+
+              return (
+                <div style={{ marginTop: 20 }}>
+                  {/* Barra animada */}
+                  <div style={{
+                    height: 10, background: 'var(--border)',
+                    borderRadius: 5, overflow: 'hidden', position: 'relative',
+                  }}>
+                    <div style={{
+                      height: '100%', width: `${pct}%`,
+                      background: 'linear-gradient(90deg, var(--primary), #e05555)',
+                      borderRadius: 5,
+                      transition: 'width 1.2s ease',
+                      position: 'relative', overflow: 'hidden',
+                    }}>
+                      {/* Shimmer que recorre la barra continuamente */}
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%)',
+                        animation: 'shimmer 1.8s infinite',
+                      }} />
+                    </div>
+                  </div>
+
+                  {/* Info debajo */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 13, color: 'var(--text-muted)' }}>
+                    <span>⏱ <strong style={{ color: 'var(--text)' }}>{formatElapsed(elapsed)}</strong> transcurridos</span>
+                    <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{Math.round(pct)}%</span>
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                    El proceso puede tomar entre 5 y 20 minutos según el tamaño del corpus
+                  </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                  <span>⏱ {formatElapsed(elapsed)} transcurridos</span>
-                  <span>El proceso puede tomar 5–20 min</span>
-                </div>
-              </div>
-            )}
+              )
+            })()}
 
             {step === 'idle' && (
               <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8 }}>
