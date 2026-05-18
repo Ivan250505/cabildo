@@ -31,6 +31,10 @@ export async function getDriveAuthUrl(): Promise<{ url: string; state: string }>
   return data
 }
 
+export async function revokeDrive(): Promise<void> {
+  await client.delete('drive/revoke')
+}
+
 export async function syncStudy(studyId: string): Promise<StudySyncResponse> {
   const { data } = await client.post<StudySyncResponse>(`drive/sync/${studyId}`)
   return data
