@@ -350,7 +350,7 @@ export default function DetallePage() {
               )}
             </div>
             <div className="card-body">
-              {geojson && geojson.features.length > 0 ? (() => {
+              {geojson && geojson.features && geojson.features.length > 0 ? (() => {
                 const lats = geojson.features.map(f => f.geometry.coordinates[1])
                 const lngs = geojson.features.map(f => f.geometry.coordinates[0])
                 const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length
