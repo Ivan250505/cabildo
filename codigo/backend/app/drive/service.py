@@ -32,8 +32,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.models import User
 from app.config import get_settings
 from app.drive.crypto import decrypt_token, encrypt_token
-from app.drive.schemas import DriveFileInfo, FolderListResponse, SyncResult, StudySyncResponse
-from app.studies.models import Study, StudyCorpus
+from app.drive.schemas import DriveFileInfo, FolderListResponse, SyncResult, StudySyncResponse, FolderFilesResponse, FolderFileItem
+from app.studies.models import CorpusExtraction, Study, StudyCorpus
 
 settings = get_settings()
 
@@ -434,6 +434,180 @@ async def sync_study(
         total_downloaded=total_downloaded,
         total_errors=total_errors,
     )
+
+
+# ── Listado y procesamiento unitario ─────────────────────────────────────────
+
+def list_folder_by_url(user: User, url: str) -> FolderFilesResponse:
+    """
+    Lista todos los archivos de una carpeta Drive a partir de su URL.
+    Recorre subcarpetas recursivamente. No descarga nada.
+    """
+    folder_id = _extract_folder_id(url)
+    if not folder_id:
+        raise HTTPException(
+            status_code=400,
+            detail="URL de carpeta Drive inválida. Debe tener el formato https://drive.google.com/drive/folders/…",
+        )
+
+    service = build_drive_client(user)
+
+    try:
+        raw = _list_folder_recursive(service, folder_id)
+    except HttpError as e:
+        raise HTTPException(status_code=502, detail=f"Error al acceder a Google Drive: {e}")
+
+    items = [
+        FolderFileItem(
+            id=meta["id"],
+            name=meta["name"],
+            mime_type=meta["mimeType"],
+            size_bytes=int(meta["size"]) if "size" in meta else None,
+            subfolder=subfolder or None,
+            tipo=_get_tipo(meta["mimeType"], meta["name"]),
+            is_procesable=_get_tipo(meta["mimeType"], meta["name"]) in ("pdf", "docx"),
+        )
+        for meta, subfolder in raw
+    ]
+    return FolderFilesResponse(url=url, total=len(items), items=items)
+
+
+_PROCESABLE_EXTS = {".pdf", ".docx", ".doc"}
+_MAX_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+async def process_single_file(
+    db: AsyncSession,
+    user: User,
+    study_id: UUID,
+    drive_file_id: str,
+    file_name: str,
+    mime_type: str,
+    fase: str,
+) -> dict:
+    """
+    Descarga UN archivo de Drive, extrae texto, genera resumen extractivo,
+    guarda los resultados en BD y borra el archivo del disco inmediatamente.
+    Nunca acumula archivos: el disco permanece casi vacío.
+    """
+    import tempfile
+    from app.documents.extractor import process_document
+
+    drive_svc = build_drive_client(user)
+
+    # Ajustar nombre para documentos de Google exportados
+    name = file_name
+    if mime_type in _EXPORT_EXT and not name.endswith(_EXPORT_EXT[mime_type]):
+        name += _EXPORT_EXT[mime_type]
+
+    tipo = _get_tipo(mime_type, name)
+
+    # Verificar si ya existe en el corpus
+    existing_q = await db.execute(
+        select(StudyCorpus).where(
+            StudyCorpus.study_id == study_id,
+            StudyCorpus.drive_file_id == drive_file_id,
+        )
+    )
+    existing = existing_q.scalar_one_or_none()
+
+    size = None
+    resumen = None
+    n_entidades = 0
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dest = Path(tmpdir) / name
+
+        # Descarga
+        try:
+            _download_file(drive_svc, drive_file_id, mime_type, dest)
+            size = dest.stat().st_size
+        except Exception as exc:
+            # Registrar el error en el corpus y relanzar
+            now_err = datetime.now(timezone.utc)
+            if existing:
+                existing.estado = "error"
+                existing.error_msg = str(exc)[:300]
+                existing.sync_at = now_err
+            else:
+                db.add(StudyCorpus(
+                    study_id=study_id, fase=fase, nombre_archivo=name,
+                    drive_file_id=drive_file_id, tipo_archivo=tipo,
+                    estado="error", error_msg=str(exc)[:300], sync_at=now_err,
+                ))
+            await db.flush()
+            raise HTTPException(status_code=502, detail=f"Error descargando '{name}': {exc}")
+
+        # Extracción de texto (solo PDF/DOCX y < 50 MB)
+        if dest.suffix.lower() in _PROCESABLE_EXTS and size < _MAX_SIZE_BYTES:
+            try:
+                doc_result = process_document(dest, source_name=name, model_name=settings.SPACY_MODEL)
+                texto = (doc_result.get("texto") or "").strip()
+                entidades = doc_result.get("entidades", [])
+
+                if texto:
+                    if len(texto) <= 500:
+                        resumen = texto
+                    else:
+                        trunc = texto[:500]
+                        cut = trunc.rfind(" ")
+                        resumen = (trunc[:cut] if cut > 200 else trunc) + "…"
+
+                now_ent = datetime.now(timezone.utc)
+                for ent in entidades:
+                    valor = (ent.get("valor") or "").strip()
+                    if not valor or len(valor) < 2:
+                        continue
+                    db.add(CorpusExtraction(
+                        study_id=study_id,
+                        tipo_dato=ent.get("tipo_dato", "desconocido"),
+                        valor=valor[:500],
+                        fuente_archivo=name,
+                        confianza=ent.get("confianza"),
+                        extraido_en=now_ent,
+                    ))
+                n_entidades = len(entidades)
+            except Exception as exc:
+                resumen = f"[Extracción fallida: {str(exc)[:120]}]"
+        # tmpdir sale del contexto → archivo borrado automáticamente
+
+    # Guardar/actualizar registro en corpus
+    now = datetime.now(timezone.utc)
+    if existing:
+        existing.nombre_archivo = name
+        existing.tipo_archivo = tipo
+        existing.tamanio_bytes = size
+        existing.ruta_local = None
+        existing.estado = "procesado"
+        existing.error_msg = None
+        existing.resumen = resumen
+        existing.sync_at = now
+        existing.procesado_en = now
+    else:
+        db.add(StudyCorpus(
+            study_id=study_id, fase=fase, nombre_archivo=name,
+            drive_file_id=drive_file_id, tipo_archivo=tipo,
+            tamanio_bytes=size, ruta_local=None,
+            estado="procesado", resumen=resumen,
+            sync_at=now, procesado_en=now,
+        ))
+
+    await db.flush()
+
+    # Avanzar estado del estudio si estaba en borrador
+    study = await db.get(Study, study_id)
+    if study and study.estado in ("borrador", "sincronizando"):
+        study.estado = "corpus_ok"
+
+    return {
+        "drive_file_id": drive_file_id,
+        "nombre_archivo": name,
+        "tipo": tipo,
+        "tamanio_bytes": size,
+        "resumen": resumen,
+        "n_entidades": n_entidades,
+        "estado": "procesado",
+    }
 
 
 # ── Upload de informes a Drive ────────────────────────────────────────────────

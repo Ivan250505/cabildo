@@ -94,6 +94,7 @@ class StudyCorpus(Base):
         default="pendiente",
     )
     error_msg: Mapped[str | None] = mapped_column(Text)
+    resumen: Mapped[str | None] = mapped_column(Text)
     sync_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     procesado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

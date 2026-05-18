@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import IndigenousDivider from '../components/IndigenousDivider'
 import { getStudy, getCorpusFiles, updateStudy, getGisGeojson } from '../api/studies'
-import { getDriveStatus, getDriveAuthUrl, syncStudy } from '../api/drive'
+import { getDriveStatus, getDriveAuthUrl, listDriveFolder, processDriveFile } from '../api/drive'
+import type { DriveFileItem, ProcessFileResult } from '../api/drive'
 import { ESTADO_LABEL, ESTADO_BADGE } from './estadoUtils'
 import type { StudyEstado } from '../types'
 
@@ -15,6 +16,11 @@ const TIPO_ICON: Record<string, string> = {
   shp: '📐', jpg: '🖼', heic: '🖼', mp4: '🎬', mp3: '🎙',
 }
 
+function formatSize(bytes: number | null): string {
+  if (!bytes) return '—'
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 
 export default function DetallePage() {
   const { id } = useParams<{ id: string }>()
@@ -22,20 +28,25 @@ export default function DetallePage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState(0)
   const [driveUrls, setDriveUrls] = useState({ fase1: '', fase2: '', fase3: '' })
-  const [syncStarted, setSyncStarted] = useState(false)
-  const [syncElapsed, setSyncElapsed] = useState(0)
   const [urlsSaved, setUrlsSaved] = useState(false)
-  const prevEstadoRef = useRef<string | undefined>(undefined)
-  const syncStartRef = useRef<number | null>(null)
+
+  // File browser state
+  const [browseFase, setBrowseFase] = useState<'FASE1' | 'FASE2' | 'FASE3' | null>(null)
+  const [folderFiles, setFolderFiles] = useState<DriveFileItem[]>([])
+  const [isListing, setIsListing] = useState(false)
+  const [listError, setListError] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Processing state
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [processProgress, setProcessProgress] = useState({ done: 0, total: 0, currentName: '' })
+  const [processResults, setProcessResults] = useState<ProcessFileResult[]>([])
+  const [processErrors, setProcessErrors] = useState<{ name: string; error: string }[]>([])
 
   const { data: study, isLoading, isError } = useQuery({
     queryKey: ['study', id],
     queryFn: () => getStudy(id!),
     enabled: !!id,
-    refetchInterval: (query) => {
-      const s = query.state.data
-      return s?.estado === 'sincronizando' ? 3000 : false
-    },
   })
 
   const { data: corpus = [] } = useQuery({
@@ -67,33 +78,6 @@ export default function DetallePage() {
     }
   }, [study?.id])
 
-  // Cuando termina la sincronización, refrescar el corpus
-  useEffect(() => {
-    if (prevEstadoRef.current === 'sincronizando' && study?.estado !== 'sincronizando') {
-      queryClient.invalidateQueries({ queryKey: ['corpus', id] })
-    }
-    prevEstadoRef.current = study?.estado
-  }, [study?.estado])
-
-  // Timer de tiempo transcurrido durante la sincronización
-  useEffect(() => {
-    const isSyncing = syncMutation.isPending || study?.estado === 'sincronizando'
-    if (!isSyncing) {
-      syncStartRef.current = null
-      setSyncElapsed(0)
-      return
-    }
-    if (syncStartRef.current === null) {
-      syncStartRef.current = Date.now()
-    }
-    const interval = setInterval(() => {
-      if (syncStartRef.current !== null) {
-        setSyncElapsed(Math.floor((Date.now() - syncStartRef.current) / 1000))
-      }
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [syncMutation.isPending, study?.estado])
-
   const saveUrlsMutation = useMutation({
     mutationFn: () => updateStudy(id!, {
       url_drive_fase1: driveUrls.fase1 || undefined,
@@ -107,16 +91,6 @@ export default function DetallePage() {
     },
   })
 
-  const syncMutation = useMutation({
-    mutationFn: () => syncStudy(id!),
-    onSuccess: () => {
-      setSyncStarted(true)
-      queryClient.invalidateQueries({ queryKey: ['study', id] })
-    },
-  })
-
-  const isSyncing = syncMutation.isPending || study?.estado === 'sincronizando'
-
   async function handleConnectDrive() {
     try {
       const { url } = await getDriveAuthUrl()
@@ -124,6 +98,71 @@ export default function DetallePage() {
     } catch {
       alert('No se pudo obtener la URL de autorización de Google Drive.')
     }
+  }
+
+  async function handleListFolder(url: string, fase: 'FASE1' | 'FASE2' | 'FASE3') {
+    if (!url) return
+    setIsListing(true)
+    setListError(null)
+    setFolderFiles([])
+    setSelectedIds(new Set())
+    setProcessResults([])
+    setProcessErrors([])
+    setBrowseFase(fase)
+    try {
+      const result = await listDriveFolder(url)
+      setFolderFiles(result.items)
+      // Auto-select procesables (PDF/DOCX)
+      setSelectedIds(new Set(result.items.filter(f => f.is_procesable).map(f => f.id)))
+    } catch (err: any) {
+      setListError(err?.response?.data?.detail ?? 'Error al listar la carpeta de Drive. Verifica la URL y la conexión.')
+    } finally {
+      setIsListing(false)
+    }
+  }
+
+  async function handleProcess() {
+    const toProcess = folderFiles.filter(f => selectedIds.has(f.id))
+    if (!toProcess.length || !browseFase) return
+    setIsProcessing(true)
+    setProcessProgress({ done: 0, total: toProcess.length, currentName: '' })
+    setProcessResults([])
+    setProcessErrors([])
+
+    const results: ProcessFileResult[] = []
+    const errors: { name: string; error: string }[] = []
+
+    for (const file of toProcess) {
+      setProcessProgress(p => ({ ...p, currentName: file.name }))
+      try {
+        const result = await processDriveFile(id!, {
+          drive_file_id: file.id,
+          file_name: file.name,
+          mime_type: file.mime_type,
+          fase: browseFase,
+        })
+        results.push(result)
+      } catch (err: any) {
+        errors.push({
+          name: file.name,
+          error: err?.response?.data?.detail ?? err?.message ?? 'Error desconocido',
+        })
+      }
+      setProcessProgress(p => ({ ...p, done: p.done + 1 }))
+    }
+
+    setProcessResults(results)
+    setProcessErrors(errors)
+    setIsProcessing(false)
+    queryClient.invalidateQueries({ queryKey: ['corpus', id] })
+    queryClient.invalidateQueries({ queryKey: ['study', id] })
+  }
+
+  function toggleSelect(fileId: string, checked: boolean) {
+    const next = new Set(selectedIds)
+    if (checked) next.add(fileId)
+    else next.delete(fileId)
+    setSelectedIds(next)
   }
 
   if (isLoading) return <div className="loading-state">Cargando estudio…</div>
@@ -142,6 +181,8 @@ export default function DetallePage() {
   const mapCenter: [number, number] = study.lat && study.lng
     ? [study.lat, study.lng]
     : [1.6144, -75.6062]
+
+  const pct = processProgress.total > 0 ? (processProgress.done / processProgress.total) * 100 : 0
 
   return (
     <>
@@ -310,21 +351,17 @@ export default function DetallePage() {
             </div>
             <div className="card-body">
               {geojson && geojson.features.length > 0 ? (() => {
-                // Calcular centroide real de los puntos
                 const lats = geojson.features.map(f => f.geometry.coordinates[1])
                 const lngs = geojson.features.map(f => f.geometry.coordinates[0])
                 const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length
                 const centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length
                 const realCenter: [number, number] = [centerLat, centerLng]
-
-                // Agrupar por capa para la leyenda
                 const capas: Record<string, string> = {}
                 geojson.features.forEach(f => { capas[f.properties.capa_label] = f.properties.color })
-
                 return (
                   <>
                     <div className="map-container">
-                      {/* @ts-ignore — react-leaflet props */}
+                      {/* @ts-ignore */}
                       <MapContainer center={realCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
                         {/* @ts-ignore */}
                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
@@ -374,7 +411,7 @@ export default function DetallePage() {
                     </MapContainer>
                   </div>
                   <div className="alert alert-info" style={{ marginTop: 8, fontSize: 12 }}>
-                    Sin datos SIG disponibles. Sincroniza el corpus con archivos .gpkg y ejecuta el análisis SIG desde Generar informe.
+                    Sin datos SIG. Procesa archivos .gpkg desde el tab Drive y ejecuta el análisis SIG desde Generar informe.
                   </div>
                 </>
               )}
@@ -422,55 +459,62 @@ export default function DetallePage() {
         </div>
       )}
 
-      {/* DRIVE */}
+      {/* DRIVE — nuevo flujo: listar → seleccionar → procesar uno a uno */}
       {activeTab === 3 && (
         <div className="two-col">
-          {/* Panel izquierdo: configurar URLs */}
+          {/* Panel izquierdo: configuración de carpetas */}
           <div className="card">
             <div className="card-header">
               <span className="section-title" style={{ margin: 0 }}>☁ Carpetas de Google Drive</span>
               {driveStatus?.connected
-                ? <span className="badge badge-success" style={{ fontSize: 11 }}>● Conectado{driveStatus.google_email ? ` · ${driveStatus.google_email}` : ''}</span>
+                ? <span className="badge badge-success" style={{ fontSize: 11 }}>● {driveStatus.google_email ?? 'Conectado'}</span>
                 : <span className="badge badge-neutral" style={{ fontSize: 11 }}>○ Sin cuenta Google</span>
               }
             </div>
             <div className="card-body">
               {!driveStatus?.connected && (
                 <div className="alert alert-warning" style={{ marginBottom: 16 }}>
-                  ⚠&nbsp;Debes conectar tu cuenta de Google antes de sincronizar.
-                  <button
-                    className="btn btn-outline btn-sm"
-                    style={{ marginLeft: 12 }}
-                    onClick={handleConnectDrive}
-                  >
+                  ⚠&nbsp;Conecta tu cuenta de Google para poder listar y procesar archivos.
+                  <button className="btn btn-outline btn-sm" style={{ marginLeft: 12 }} onClick={handleConnectDrive}>
                     Conectar Google Drive
                   </button>
                 </div>
               )}
 
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-                Pega la URL de cada carpeta de Drive correspondiente a cada fase del estudio.
-                La URL debe tener el formato <code>https://drive.google.com/drive/folders/…</code>
+                Pega la URL de cada carpeta de Drive. Luego haz clic en <strong>📂 Ver</strong> para
+                listar los archivos y seleccionar cuáles procesar.
               </div>
 
               {[
-                { label: 'Carpeta FASE 1 — Pre-campo', key: 'fase1' as const, placeholder: 'https://drive.google.com/drive/folders/1ABC...' },
-                { label: 'Carpeta FASE 2 — Campo', key: 'fase2' as const, placeholder: 'https://drive.google.com/drive/folders/2DEF...' },
-                { label: 'Carpeta FASE 3 — Post-campo', key: 'fase3' as const, placeholder: 'https://drive.google.com/drive/folders/3GHI... (opcional)' },
-              ].map(({ label, key, placeholder }) => (
+                { label: 'FASE 1 — Pre-campo', key: 'fase1' as const, fase: 'FASE1' as const, placeholder: 'https://drive.google.com/drive/folders/…' },
+                { label: 'FASE 2 — Campo', key: 'fase2' as const, fase: 'FASE2' as const, placeholder: 'https://drive.google.com/drive/folders/…' },
+                { label: 'FASE 3 — Post-campo', key: 'fase3' as const, fase: 'FASE3' as const, placeholder: 'https://drive.google.com/drive/folders/… (opcional)' },
+              ].map(({ label, key, fase, placeholder }) => (
                 <div className="form-group" key={key}>
                   <label className="form-label">{label}</label>
-                  <input
-                    className="form-input"
-                    type="url"
-                    placeholder={placeholder}
-                    value={driveUrls[key]}
-                    onChange={(e) => setDriveUrls((prev) => ({ ...prev, [key]: e.target.value }))}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      className="form-input"
+                      type="url"
+                      placeholder={placeholder}
+                      value={driveUrls[key]}
+                      onChange={(e) => setDriveUrls(prev => ({ ...prev, [key]: e.target.value }))}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{ whiteSpace: 'nowrap' }}
+                      disabled={!driveUrls[key] || isListing || !driveStatus?.connected}
+                      onClick={() => handleListFolder(driveUrls[key], fase)}
+                    >
+                      📂 Ver
+                    </button>
+                  </div>
                 </div>
               ))}
 
-              <div className="flex gap-2" style={{ marginTop: 8 }}>
+              <div className="flex gap-2" style={{ marginTop: 12 }}>
                 <button
                   className="btn btn-outline"
                   onClick={() => saveUrlsMutation.mutate()}
@@ -478,98 +522,164 @@ export default function DetallePage() {
                 >
                   {saveUrlsMutation.isPending ? 'Guardando…' : '💾 Guardar URLs'}
                 </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => syncMutation.mutate()}
-                  disabled={isSyncing || (!driveUrls.fase1 && !driveUrls.fase2)}
-                >
-                  {isSyncing ? '⏳ Sincronizando…' : '🔄 Sincronizar corpus'}
-                </button>
               </div>
 
-              {urlsSaved && (
-                <div className="alert alert-success" style={{ marginTop: 12 }}>✓ URLs guardadas correctamente.</div>
-              )}
-              {saveUrlsMutation.isError && (
-                <div className="alert alert-error" style={{ marginTop: 12 }}>✗ Error al guardar las URLs.</div>
-              )}
-              {syncMutation.isError && (
-                <div className="alert alert-error" style={{ marginTop: 12 }}>✗ Error al iniciar la sincronización. Verifica que las URLs sean correctas y que Drive esté conectado.</div>
-              )}
-              {isSyncing && study?.estado === 'sincronizando' && (
-                <div className="alert alert-info" style={{ marginTop: 12, fontSize: 12 }}>
-                  ℹ La sincronización corre en segundo plano. Puedes navegar a otras páginas y volver más tarde.
+              {urlsSaved && <div className="alert alert-success" style={{ marginTop: 10 }}>✓ URLs guardadas.</div>}
+              {saveUrlsMutation.isError && <div className="alert alert-error" style={{ marginTop: 10 }}>✗ Error al guardar las URLs.</div>}
+
+              {corpus.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Corpus actual
+                  </div>
+                  <div className="flex gap-3">
+                    {[
+                      { label: 'Total', v: corpus.length },
+                      { label: 'F1', v: fase1.length },
+                      { label: 'F2', v: fase2.length },
+                      { label: 'F3', v: fase3.length },
+                    ].map(m => (
+                      <div key={m.label} style={{ textAlign: 'center', flex: 1 }}>
+                        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, color: 'var(--primary)' }}>{m.v}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.label}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Panel derecho: estado de sincronización */}
+          {/* Panel derecho: explorador de archivos */}
           <div className="card">
             <div className="card-header">
-              <span className="section-title" style={{ margin: 0 }}>Estado de sincronización</span>
+              <span className="section-title" style={{ margin: 0 }}>
+                {browseFase ? `📂 ${browseFase} · ${folderFiles.length} archivos` : 'Explorador de archivos'}
+              </span>
+              {browseFase && folderFiles.length > 0 && !isProcessing && (
+                <div className="flex gap-2">
+                  <button className="btn btn-outline btn-sm" onClick={() => setSelectedIds(new Set(folderFiles.map(f => f.id)))}>
+                    Todo
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={() => setSelectedIds(new Set(folderFiles.filter(f => f.is_procesable).map(f => f.id)))}>
+                    PDF/DOCX
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={() => setSelectedIds(new Set())}>
+                    Ninguno
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="card-body">
-              {isSyncing ? (
-                <div style={{ textAlign: 'center', padding: 32 }}>
-                  <div style={{ fontSize: 36, marginBottom: 12 }}>⟳</div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Descargando archivos de Google Drive…</div>
-                  <div className="text-sm text-muted">
-                    {corpus.length > 0 ? `${corpus.length} archivos registrados hasta ahora` : 'Conectando con Drive…'}
-                  </div>
-                  <div style={{ margin: '20px auto', maxWidth: 280 }}>
-                    <div className="progress-bar-wrap" style={{ height: 8 }}>
-                      <div className="progress-bar" style={{ width: '70%' }} />
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted">
-                    ⏱ {Math.floor(syncElapsed / 60)}:{String(syncElapsed % 60).padStart(2, '0')} transcurridos
-                  </div>
-                  <div className="text-sm text-muted" style={{ marginTop: 4 }}>
-                    Puede tomar varios minutos según el tamaño del corpus
-                  </div>
+            <div className="card-body" style={{ padding: 0 }}>
+              {isListing ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
+                  <div>Listando archivos de Drive…</div>
+                  <div className="text-sm text-muted" style={{ marginTop: 4 }}>Recorriendo subcarpetas</div>
                 </div>
-              ) : corpus.length > 0 ? (
-                <>
-                  {syncStarted && (
-                    <div className="alert alert-success" style={{ marginBottom: 16 }}>
-                      ✓ Sincronización completada exitosamente.
-                    </div>
-                  )}
-                  <div className="flex gap-3" style={{ marginBottom: 16 }}>
-                    {[
-                      { label: 'Total', value: corpus.length, unit: 'archivos' },
-                      { label: 'FASE 1', value: corpus.filter((f: any) => f.fase === 'FASE1').length, unit: 'docs' },
-                      { label: 'FASE 2', value: corpus.filter((f: any) => f.fase === 'FASE2').length, unit: 'arch.' },
-                      { label: 'FASE 3', value: corpus.filter((f: any) => f.fase === 'FASE3').length, unit: 'docs' },
-                    ].map((m) => (
-                      <div key={m.label} style={{ textAlign: 'center', flex: 1 }}>
-                        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700, color: 'var(--primary)' }}>
-                          {m.value}
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{m.label}</div>
-                        <div className="text-sm text-muted">{m.unit}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="alert alert-info" style={{ fontSize: 12 }}>
-                    ✓ El corpus está disponible en las pestañas de fase para revisión.
-                  </div>
-                  {study?.error_msg && (
-                    <div className="alert alert-warning" style={{ marginTop: 8, fontSize: 12 }}>
-                      ⚠ {study.error_msg}
-                    </div>
-                  )}
-                </>
+              ) : listError ? (
+                <div style={{ padding: 16 }}>
+                  <div className="alert alert-error">✗ {listError}</div>
+                </div>
+              ) : !browseFase ? (
+                <div className="empty-state" style={{ padding: 40 }}>
+                  <div className="empty-state-icon">📂</div>
+                  <p>Haz clic en <strong>📂 Ver</strong> junto a una fase para listar sus archivos.</p>
+                </div>
+              ) : folderFiles.length === 0 ? (
+                <div className="empty-state" style={{ padding: 40 }}>
+                  <div className="empty-state-icon">📭</div>
+                  <p>La carpeta está vacía o no tiene archivos accesibles.</p>
+                </div>
               ) : (
-                <div className="empty-state" style={{ padding: 32 }}>
-                  <div className="empty-state-icon">☁</div>
-                  <p>Aún no se ha sincronizado este estudio.</p>
-                  {study?.error_msg && (
-                    <div className="alert alert-error" style={{ marginTop: 8, fontSize: 12 }}>✗ {study.error_msg}</div>
-                  )}
-                  <p className="text-sm text-muted">Ingresa las URLs de Drive y haz clic en "Sincronizar corpus".</p>
-                </div>
+                <>
+                  {/* Lista de archivos */}
+                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {folderFiles.map(file => {
+                      const processed = processResults.find(r => r.drive_file_id === file.id)
+                      const failed = processErrors.find(e => e.name === file.name)
+                      return (
+                        <div
+                          key={file.id}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '6px 14px', borderBottom: '1px solid var(--border-subtle)',
+                            background: processed ? 'var(--bg-alt)' : failed ? '#fef2f2' : 'transparent',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(file.id)}
+                            disabled={isProcessing}
+                            onChange={e => toggleSelect(file.id, e.target.checked)}
+                          />
+                          <span style={{ fontSize: 14 }}>{TIPO_ICON[file.tipo] ?? '📎'}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {file.subfolder && (
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginRight: 4 }}>
+                                {file.subfolder}/
+                              </span>
+                            )}
+                            <span style={{ fontSize: 12 }}>{file.name}</span>
+                            {processed?.resumen && (
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {processed.resumen}
+                              </div>
+                            )}
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {formatSize(file.size_bytes)}
+                          </span>
+                          {processed && <span className="badge badge-success" style={{ fontSize: 10 }}>✓</span>}
+                          {failed && <span className="badge badge-error" style={{ fontSize: 10 }}>✗</span>}
+                          {file.is_procesable && !processed && !failed && (
+                            <span className="badge badge-neutral" style={{ fontSize: 10 }}>PDF/DOCX</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Barra de procesamiento */}
+                  <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+                    {isProcessing ? (
+                      <>
+                        <div style={{ fontSize: 12, marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+                          <span>⚡ {processProgress.done}/{processProgress.total} — <em>{processProgress.currentName}</em></span>
+                          <span className="text-muted">{Math.round(pct)}%</span>
+                        </div>
+                        <div className="progress-bar-wrap" style={{ height: 6 }}>
+                          <div className="progress-bar" style={{ width: `${pct}%`, transition: 'width 0.3s ease' }} />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex gap-2" style={{ alignItems: 'center' }}>
+                        <button
+                          className="btn btn-primary"
+                          disabled={selectedIds.size === 0}
+                          onClick={handleProcess}
+                        >
+                          ⚡ Procesar {selectedIds.size} archivo{selectedIds.size !== 1 ? 's' : ''} seleccionado{selectedIds.size !== 1 ? 's' : ''}
+                        </button>
+                        <span className="text-sm text-muted">
+                          {selectedIds.size} de {folderFiles.length} seleccionados
+                        </span>
+                      </div>
+                    )}
+
+                    {!isProcessing && processResults.length > 0 && (
+                      <div className="alert alert-success" style={{ marginTop: 10, fontSize: 12 }}>
+                        ✓ {processResults.length} archivo{processResults.length !== 1 ? 's' : ''} procesado{processResults.length !== 1 ? 's' : ''}.
+                        {processErrors.length > 0 && ` ${processErrors.length} con error.`}
+                      </div>
+                    )}
+                    {!isProcessing && processErrors.length > 0 && processResults.length === 0 && (
+                      <div className="alert alert-error" style={{ marginTop: 10, fontSize: 12 }}>
+                        ✗ Todos los archivos fallaron. Verifica la conexión con Drive.
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>

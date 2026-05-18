@@ -14,6 +14,9 @@ from app.drive.schemas import (
     DriveAuthUrlResponse,
     DriveStatusResponse,
     FolderListResponse,
+    FolderFilesResponse,
+    ProcessFileRequest,
+    ProcessFileResponse,
 )
 
 router = APIRouter(prefix="/api/drive", tags=["drive"])
@@ -99,6 +102,37 @@ async def list_folder(
 ):
     """Lista los archivos dentro de una carpeta de Google Drive."""
     return service.list_folder_files(current_user, folder_id)
+
+
+@router.get("/folder-files", response_model=FolderFilesResponse)
+async def list_drive_folder(
+    url: str = Query(..., description="URL completa de la carpeta de Google Drive"),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Lista todos los archivos de una carpeta Drive (recursivo, sin descargar nada).
+    Devuelve metadatos: id, nombre, tipo, tamaño, subcarpeta.
+    """
+    return service.list_folder_by_url(current_user, url)
+
+
+@router.post("/process-file/{study_id}", response_model=ProcessFileResponse)
+async def process_drive_file(
+    study_id: UUID,
+    body: ProcessFileRequest,
+    current_user: User = Depends(require_tecnico),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Descarga UN archivo de Drive, extrae texto, genera resumen, guarda en BD y borra el archivo.
+    Llamar de uno en uno desde el frontend para control de progreso sin timeout.
+    """
+    result = await service.process_single_file(
+        db, current_user, study_id,
+        body.drive_file_id, body.file_name, body.mime_type, body.fase,
+    )
+    await db.commit()
+    return result
 
 
 @router.post("/sync/{study_id}", status_code=202)

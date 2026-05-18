@@ -42,3 +42,38 @@ class StudySyncResponse(BaseModel):
     fases: list[SyncResult]
     total_downloaded: int
     total_errors: int
+
+
+# ── Nuevos: listado y procesamiento unitario ──────────────────────────────────
+
+class FolderFileItem(BaseModel):
+    id: str
+    name: str
+    mime_type: str
+    size_bytes: int | None
+    subfolder: str | None
+    tipo: str
+    is_procesable: bool
+
+
+class FolderFilesResponse(BaseModel):
+    url: str
+    total: int
+    items: list[FolderFileItem]
+
+
+class ProcessFileRequest(BaseModel):
+    drive_file_id: str
+    file_name: str
+    mime_type: str
+    fase: str
+
+
+class ProcessFileResponse(BaseModel):
+    drive_file_id: str
+    nombre_archivo: str
+    tipo: str
+    tamanio_bytes: int | None
+    resumen: str | None
+    n_entidades: int
+    estado: str
