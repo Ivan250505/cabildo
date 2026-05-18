@@ -53,7 +53,7 @@ async def process_study_corpus(
     """
     study = await _get_study_or_404(db, study_id)
 
-    if study.estado not in ("corpus_ok", "sincronizando", "procesando", "listo_revision", "error"):
+    if study.estado not in ("borrador", "corpus_ok", "sincronizando", "procesando", "listo_revision", "error"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"No se puede procesar el corpus en estado '{study.estado}'.",

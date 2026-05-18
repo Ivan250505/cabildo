@@ -187,8 +187,8 @@ export default function DetallePage() {
                             <div className="file-left">
                               {TIPO_ICON[f.tipo_archivo] ?? '📄'} {f.nombre_archivo}
                             </div>
-                            <span className={f.estado === 'sincronizado' ? 'file-check' : 'file-warn'}>
-                              {f.estado === 'sincronizado' ? '✓' : '⏳'}
+                            <span className={f.estado === 'descargado' || f.estado === 'procesado' ? 'file-check' : 'file-warn'}>
+                              {f.estado === 'descargado' || f.estado === 'procesado' ? '✓' : '⏳'}
                             </span>
                           </div>
                         ))}
@@ -251,8 +251,8 @@ export default function DetallePage() {
                         {fase2.map((f: any) => (
                           <div className="file-item" key={f.id}>
                             <div className="file-left">{TIPO_ICON[f.tipo_archivo] ?? '📄'} {f.nombre_archivo}</div>
-                            <span className={f.estado === 'sincronizado' ? 'file-check' : 'file-warn'}>
-                              {f.estado === 'sincronizado' ? '✓' : '⏳'}
+                            <span className={f.estado === 'descargado' || f.estado === 'procesado' ? 'file-check' : 'file-warn'}>
+                              {f.estado === 'descargado' || f.estado === 'procesado' ? '✓' : '⏳'}
                             </span>
                           </div>
                         ))}
@@ -367,8 +367,8 @@ export default function DetallePage() {
                         {fase3.map((f: any) => (
                           <div className="file-item" key={f.id}>
                             <div className="file-left">{TIPO_ICON[f.tipo_archivo] ?? '📄'} {f.nombre_archivo}</div>
-                            <span className={f.estado === 'sincronizado' ? 'file-check' : 'file-warn'}>
-                              {f.estado === 'sincronizado' ? '✓' : '⏳'}
+                            <span className={f.estado === 'descargado' || f.estado === 'procesado' ? 'file-check' : 'file-warn'}>
+                              {f.estado === 'descargado' || f.estado === 'procesado' ? '✓' : '⏳'}
                             </span>
                           </div>
                         ))}

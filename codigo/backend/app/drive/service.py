@@ -418,9 +418,14 @@ async def sync_study(
         first_url = study.url_drive_fase1 or study.url_drive_fase2 or study.url_drive_fase3
         if first_url:
             study.drive_folder_id = _extract_folder_id(first_url)
-            await db.flush()
 
     total_downloaded = sum(r.files_downloaded for r in sync_results)
+
+    # Avanzar el estado: si se descargaron archivos y el estudio estaba en borrador → corpus_ok
+    if total_downloaded > 0 and study.estado in ("borrador", "sincronizando"):
+        study.estado = "corpus_ok"
+
+    await db.flush()
     total_errors = sum(len(r.errors) for r in sync_results)
 
     return StudySyncResponse(
