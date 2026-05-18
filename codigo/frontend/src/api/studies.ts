@@ -63,6 +63,20 @@ export interface GisGeojson {
   metadata: { total_puntos: number; capas: string[]; nombre_comunidad: string }
 }
 
+export interface Extraction {
+  id: string
+  tipo_dato: string
+  valor: string | null
+  fuente_archivo: string | null
+  confianza: number | null
+  extraido_en: string
+}
+
+export async function getExtractions(studyId: string): Promise<Extraction[]> {
+  const { data } = await client.get<Extraction[]>(`studies/${studyId}/extractions`)
+  return data
+}
+
 export async function getGisGeojson(studyId: string): Promise<GisGeojson> {
   const { data } = await client.get<GisGeojson>(`studies/${studyId}/gis/geojson`)
   return data

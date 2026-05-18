@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import IndigenousDivider from '../components/IndigenousDivider'
-import { getStudy } from '../api/studies'
-import { getReports, generateReport, approveReport, downloadReportBlob } from '../api/studies'
+import { getStudy, getReports, generateReport, approveReport, downloadReportBlob, getExtractions } from '../api/studies'
+import type { Extraction } from '../api/studies'
 import type { Report } from '../types'
 
 const TOC_ITEMS = [
@@ -32,6 +32,71 @@ const SECTION_HEADERS: Record<string, string> = {
   s6a: '6. Módulos de valor agregado',
 }
 
+// Agrupa las extracciones poblacionales por archivo fuente y arma las filas de la tabla
+function buildPoblacionRows(extractions: Extraction[]) {
+  const byFile: Record<string, Record<string, string>> = {}
+  for (const e of extractions) {
+    if (!['familias_count', 'personas_count', 'fecha_censo', 'fuente_censo'].includes(e.tipo_dato)) continue
+    const file = e.fuente_archivo ?? 'Desconocido'
+    if (!byFile[file]) byFile[file] = {}
+    if (!byFile[file][e.tipo_dato]) byFile[file][e.tipo_dato] = e.valor ?? ''
+  }
+  return Object.entries(byFile).map(([file, vals]) => ({
+    fuente: vals['fuente_censo'] ?? file.replace(/\.[^.]+$/, ''),
+    familias: vals['familias_count'] ?? '—',
+    personas: vals['personas_count'] ?? '—',
+    fecha: vals['fecha_censo'] ?? '—',
+  }))
+}
+
+function PoblacionTable({ extractions }: { extractions: Extraction[] }) {
+  const rows = buildPoblacionRows(extractions)
+
+  if (!rows.length) {
+    return (
+      <p className="doc-p" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>
+        Sin datos poblacionales extraídos. Ejecuta el proceso de extracción documental para poblar esta sección.
+      </p>
+    )
+  }
+
+  const valores = rows.map(r => parseInt(r.familias) || 0).filter(Boolean)
+  const max = Math.max(...valores)
+  const min = Math.min(...valores)
+  const hayDiscrepancia = valores.length > 1 && max !== min
+
+  return (
+    <>
+      <table className="doc-table">
+        <thead>
+          <tr><th>Fuente</th><th>Familias</th><th>Personas</th><th>Fecha</th><th>Estado</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const fam = parseInt(row.familias) || 0
+            const esDivergente = hayDiscrepancia && fam === max && i > 0
+            return (
+              <tr key={i} className={esDivergente ? 'discrepancy' : ''}>
+                <td>{row.fuente}</td>
+                <td>{esDivergente ? <span className="highlight-warn">{row.familias}</span> : row.familias}</td>
+                <td>{esDivergente ? <span className="highlight-warn">{row.personas}</span> : row.personas}</td>
+                <td>{row.fecha}</td>
+                <td>{esDivergente ? '⚠ Diferencia' : '✓'}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {hayDiscrepancia && (
+        <p className="doc-p">
+          Se identifican <strong>discrepancias en el número de familias</strong> entre las fuentes del corpus.
+          Diferencia máxima: {max - min} familias.
+        </p>
+      )}
+    </>
+  )
+}
+
 function latestReport(reports: Report[]): Report | null {
   if (!reports.length) return null
   return reports.reduce((a, b) => (a.version > b.version ? a : b))
@@ -52,6 +117,12 @@ export default function RevisionPage() {
   const { data: reports = [], isLoading: reportsLoading } = useQuery({
     queryKey: ['reports', id],
     queryFn: () => getReports(id!),
+    enabled: !!id && !!study,
+  })
+
+  const { data: extractions = [] } = useQuery({
+    queryKey: ['extractions', id],
+    queryFn: () => getExtractions(id!),
     enabled: !!id && !!study,
   })
 
@@ -253,39 +324,25 @@ export default function RevisionPage() {
             <div className="doc-h2">6.1 Validación de discrepancias entre fuentes poblacionales</div>
             <p className="doc-p">
               Con el fin de garantizar la consistencia de la información demográfica de {study.nombre_comunidad},
-              el sistema realizó el cruce automático de las cuatro fuentes disponibles en el corpus:
+              el sistema realizó el cruce automático de las fuentes disponibles en el corpus:
             </p>
 
-            <table className="doc-table">
-              <thead>
-                <tr><th>Fuente</th><th>Familias</th><th>Personas</th><th>Fecha</th><th>Estado</th></tr>
-              </thead>
-              <tbody>
-                <tr><td>Censo del Ministerio del Interior</td><td>24</td><td>89</td><td>2024</td><td>✓ Oficial</td></tr>
-                <tr className="discrepancy">
-                  <td>Autocenso comunitario</td>
-                  <td><span className="highlight-warn">27</span></td>
-                  <td><span className="highlight-warn">98</span></td>
-                  <td>2025</td>
-                  <td>⚠ Diferencia</td>
-                </tr>
-                <tr><td>Derecho de petición (solicitud)</td><td>25</td><td>92</td><td>2025</td><td>✓</td></tr>
-                <tr><td>Registros del cabildo (actas)</td><td>26</td><td>95</td><td>2025</td><td>✓</td></tr>
-              </tbody>
-            </table>
+            <PoblacionTable extractions={extractions} />
 
-            <p className="doc-p">
-              Se identifican <strong>discrepancias en el número de familias</strong> entre el Censo del Ministerio (24 familias / 89 personas)
-              y el autocenso comunitario más reciente (27 familias / 98 personas), con una diferencia de 3 familias y 9 personas.
-            </p>
-
-            <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 'var(--radius)', padding: 12, fontSize: 12.5, color: '#92400e', margin: '12px 0' }}>
-              <strong>⚠ Nota aclaratoria generada automáticamente:</strong> La diferencia puede explicarse por nacimientos
-              posteriores al último corte censal del Ministerio (2024) y por el ingreso de 3 familias que se han autoreconocido
-              como parte del colectivo en el período 2024-2025. Se recomienda al responsable técnico validar y complementar esta nota.
-              <br /><br />
-              <em>[El responsable técnico puede editar esta nota antes de aprobar el informe]</em>
-            </div>
+            {(() => {
+              const discrepancias = extractions.filter(e => e.tipo_dato === 'discrepancia_poblacion')
+              if (!discrepancias.length) return null
+              return (
+                <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 'var(--radius)', padding: 12, fontSize: 12.5, color: '#92400e', margin: '12px 0' }}>
+                  <strong>⚠ Discrepancias detectadas:</strong>
+                  {discrepancias.map((d, i) => (
+                    <div key={i} style={{ marginTop: 4 }}>{d.valor}</div>
+                  ))}
+                  <br />
+                  <em>[El responsable técnico debe validar esta información antes de aprobar el informe]</em>
+                </div>
+              )
+            })()}
 
             <div className="doc-h2">6.2 Cruce con datos abiertos del DANE</div>
             <p className="doc-p">
