@@ -1,6 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -60,10 +60,31 @@ async def download_report(
     _: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Descarga el archivo .docx del informe."""
-    docx_bytes, filename = await service.get_report_bytes(db, study_id, report_id)
-    return Response(
-        content=docx_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    """Descarga el .docx del informe (o redirige al PDF en Drive si el .docx ya no está en disco)."""
+    from sqlalchemy import select
+    from app.studies.models import Report
+    from pathlib import Path
+    result = await db.execute(
+        select(Report).where(Report.id == report_id, Report.study_id == study_id)
     )
+    report = result.scalar_one_or_none()
+    if not report:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Informe no encontrado")
+
+    # Intentar servir el .docx local
+    if report.archivo_docx:
+        path = Path(report.archivo_docx)
+        if path.exists():
+            return Response(
+                content=path.read_bytes(),
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
+            )
+
+    # Si el .docx no está en disco pero hay URL de Drive, redirigir al PDF
+    if report.drive_url:
+        return RedirectResponse(url=report.drive_url, status_code=302)
+
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Archivo del informe no disponible")

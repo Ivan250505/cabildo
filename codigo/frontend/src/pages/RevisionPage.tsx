@@ -244,8 +244,19 @@ export default function RevisionPage() {
             className="btn btn-outline"
             onClick={() => handleDownload(report)}
           >
-            ⬇ Descargar borrador .docx
+            ⬇ Descargar .docx
           </button>
+
+          {report.drive_url && (
+            <a
+              href={report.drive_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-outline"
+            >
+              📄 Ver PDF en Drive
+            </a>
+          )}
 
           {!yaAprobado && (
             <button

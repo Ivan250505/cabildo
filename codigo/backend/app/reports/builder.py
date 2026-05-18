@@ -10,8 +10,13 @@ Paleta institucional:
 from __future__ import annotations
 
 import io
+import logging
+import subprocess
+import tempfile
 from datetime import date, datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -634,3 +639,34 @@ def build_report(
     doc.save(buf)
     buf.seek(0)
     return buf.read()
+
+
+def docx_to_pdf(docx_bytes: bytes) -> bytes:
+    """
+    Convierte bytes de un .docx a PDF usando LibreOffice headless.
+    Lanza RuntimeError si LibreOffice no está instalado o la conversión falla.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        docx_path = Path(tmpdir) / "report.docx"
+        docx_path.write_bytes(docx_bytes)
+
+        result = subprocess.run(
+            [
+                "libreoffice", "--headless", "--norestore",
+                "--convert-to", "pdf",
+                "--outdir", tmpdir,
+                str(docx_path),
+            ],
+            capture_output=True,
+            timeout=120,
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr.decode(errors="replace")
+            raise RuntimeError(f"LibreOffice conversion failed: {stderr}")
+
+        pdf_path = Path(tmpdir) / "report.pdf"
+        if not pdf_path.exists():
+            raise RuntimeError("LibreOffice no produjo el archivo PDF")
+
+        return pdf_path.read_bytes()

@@ -164,6 +164,8 @@ class ReportResponse(BaseModel):
     archivo_docx: str | None
     archivo_zip: str | None
     hash_docx: str | None
+    drive_file_id: str | None
+    drive_url: str | None
     generado_por: UUID | None
     aprobado_por: UUID | None
     parametros: dict | None

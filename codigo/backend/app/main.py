@@ -37,6 +37,13 @@ async def lifespan(app: FastAPI):
         await conn.execute(text(
             "ALTER TYPE corpus_tipo ADD VALUE IF NOT EXISTS 'otro'"
         ))
+        # Columnas añadidas post-creación inicial de la tabla reports
+        await conn.execute(text(
+            "ALTER TABLE reports ADD COLUMN IF NOT EXISTS drive_file_id VARCHAR(200)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE reports ADD COLUMN IF NOT EXISTS drive_url TEXT"
+        ))
 
     yield
     await engine.dispose()

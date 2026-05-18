@@ -73,6 +73,8 @@ export interface Report {
   archivo_docx: string | null
   archivo_zip: string | null
   hash_docx: string | null
+  drive_file_id: string | null
+  drive_url: string | null
   generado_por: string | null
   aprobado_por: string | null
   parametros: Record<string, unknown> | null

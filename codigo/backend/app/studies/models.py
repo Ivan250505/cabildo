@@ -144,6 +144,8 @@ class Report(Base):
     archivo_docx: Mapped[str | None] = mapped_column(Text)
     archivo_zip: Mapped[str | None] = mapped_column(Text)
     hash_docx: Mapped[str | None] = mapped_column(String(64))
+    drive_file_id: Mapped[str | None] = mapped_column(String(200))
+    drive_url: Mapped[str | None] = mapped_column(Text)
     generado_por: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     aprobado_por: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     parametros: Mapped[dict | None] = mapped_column(JSON)

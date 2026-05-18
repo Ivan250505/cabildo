@@ -24,7 +24,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from jose import jwt as jose_jwt, JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,10 @@ from app.studies.models import Study, StudyCorpus
 
 settings = get_settings()
 
-SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.file",
+]
 
 # ── Tipos de archivo soportados (MIME → corpus tipo) ──────────────────────────
 
@@ -426,3 +429,68 @@ async def sync_study(
         total_downloaded=total_downloaded,
         total_errors=total_errors,
     )
+
+
+# ── Upload de informes a Drive ────────────────────────────────────────────────
+
+def _find_or_create_subfolder(service, name: str, parent_id: str) -> str:
+    """Busca una subcarpeta por nombre dentro de parent_id; la crea si no existe."""
+    query = (
+        f"name = '{name}' and '{parent_id}' in parents "
+        f"and mimeType = '{_FOLDER_MIME}' and trashed = false"
+    )
+    result = service.files().list(q=query, fields="files(id)", pageSize=10).execute()
+    files = result.get("files", [])
+    if files:
+        return files[0]["id"]
+    folder = service.files().create(
+        body={"name": name, "mimeType": _FOLDER_MIME, "parents": [parent_id]},
+        fields="id",
+    ).execute()
+    return folder["id"]
+
+
+def upload_report_to_drive(
+    user: "User",
+    fase3_url: str,
+    pdf_bytes: bytes,
+    filename: str,
+) -> tuple[str, str]:
+    """
+    Sube el PDF del informe a FASE3/CONCEPTO/ en el Drive del estudio.
+
+    Requiere que el usuario tenga un token de Drive con scope drive.file.
+    Retorna (file_id, web_view_link).
+    """
+    service = build_drive_client(user)
+
+    fase3_id = _extract_folder_id(fase3_url)
+    if not fase3_id:
+        raise ValueError(f"URL de FASE 3 inválida: {fase3_url}")
+
+    concepto_id = _find_or_create_subfolder(service, "CONCEPTO", fase3_id)
+
+    # Si ya existe un archivo con el mismo nombre, sobreescribirlo
+    query = (
+        f"name = '{filename}' and '{concepto_id}' in parents and trashed = false"
+    )
+    existing = service.files().list(q=query, fields="files(id)", pageSize=5).execute()
+    existing_files = existing.get("files", [])
+
+    media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype="application/pdf", resumable=False)
+
+    if existing_files:
+        file_id = existing_files[0]["id"]
+        updated = service.files().update(
+            fileId=file_id,
+            media_body=media,
+            fields="id,webViewLink",
+        ).execute()
+        return updated["id"], updated.get("webViewLink", "")
+    else:
+        created = service.files().create(
+            body={"name": filename, "parents": [concepto_id], "mimeType": "application/pdf"},
+            media_body=media,
+            fields="id,webViewLink",
+        ).execute()
+        return created["id"], created.get("webViewLink", "")

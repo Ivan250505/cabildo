@@ -13,13 +13,18 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import logging
+
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.studies.models import (
     CorpusExtraction, GISResult, Report, Study, StudyCorpus
 )
-from app.reports.builder import build_report
+from app.auth.models import User
+from app.reports.builder import build_report, docx_to_pdf
 from app.documents.ai_writer import generate_sections
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -175,16 +180,45 @@ async def build_report_bg(study_id: UUID, report_id: UUID) -> None:
                 ai_content=ai_content,
             )
 
+            nombre_safe = study.nombre_comunidad.replace(" ", "_")
+            filename_base = f"Informe_{nombre_safe}_v{report.version}"
+
+            # Guardar .docx localmente (efímero, disponible para descarga inmediata)
             out_dir = Path(settings.FILES_BASE_PATH) / str(study_id) / "reports"
             out_dir.mkdir(parents=True, exist_ok=True)
-            filename = f"Informe_{study.nombre_comunidad.replace(' ', '_')}_v{report.version}.docx"
-            out_path = out_dir / filename
-            out_path.write_bytes(docx_bytes)
+            docx_path = out_dir / f"{filename_base}.docx"
+            docx_path.write_bytes(docx_bytes)
 
-            report.estado = "listo_revision"
-            report.archivo_docx = str(out_path)
+            report.archivo_docx = str(docx_path)
             report.hash_docx = _sha256(docx_bytes)
 
+            # Convertir a PDF y subir a Drive FASE3/CONCEPTO/
+            pdf_filename = f"{filename_base}.pdf"
+            try:
+                pdf_bytes = docx_to_pdf(docx_bytes)
+
+                if study.url_drive_fase3 and report.generado_por:
+                    generador = await db.get(User, report.generado_por)
+                    if generador and generador.google_token:
+                        from app.drive.service import upload_report_to_drive
+                        file_id, web_view_link = upload_report_to_drive(
+                            generador,
+                            study.url_drive_fase3,
+                            pdf_bytes,
+                            pdf_filename,
+                        )
+                        report.drive_file_id = file_id
+                        report.drive_url = web_view_link
+                        logger.info("PDF subido a Drive: %s", web_view_link)
+                    else:
+                        logger.warning("Sin token Drive para usuario %s — PDF no subido", report.generado_por)
+                else:
+                    logger.info("Estudio sin url_drive_fase3 — PDF no subido a Drive")
+
+            except Exception as pdf_exc:
+                logger.warning("No se pudo generar/subir PDF: %s", pdf_exc)
+
+            report.estado = "listo_revision"
             if study.estado not in ("aprobado", "exportado"):
                 study.estado = "listo_revision"
 
