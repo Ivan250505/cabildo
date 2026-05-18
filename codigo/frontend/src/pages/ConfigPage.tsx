@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getDriveStatus, getDriveAuthUrl, revokeDrive } from '../api/drive'
+import { toast } from '../lib/toast'
 
 const CONFIG_KEY = 'etnosia_config'
 
@@ -42,7 +43,10 @@ export default function ConfigPage() {
 
   const revokeMutation = useMutation({
     mutationFn: revokeDrive,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['drive-status'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['drive-status'] })
+      toast.info('Google Drive desconectado', 'Puedes volver a conectarlo cuando quieras.')
+    },
   })
 
   async function handleConnectDrive() {
@@ -50,7 +54,7 @@ export default function ConfigPage() {
       const { url } = await getDriveAuthUrl()
       window.location.href = url
     } catch {
-      alert('No se pudo obtener la URL de autorización de Google Drive.')
+      toast.error('Error de conexión', 'No se pudo obtener la URL de autorización de Google Drive.')
     }
   }
 

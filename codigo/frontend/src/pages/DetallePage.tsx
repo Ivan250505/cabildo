@@ -8,6 +8,7 @@ import { getDriveStatus, getDriveAuthUrl, listDriveFolder, processDriveFile } fr
 import type { DriveFileItem, ProcessFileResult } from '../api/drive'
 import { ESTADO_LABEL, ESTADO_BADGE } from './estadoUtils'
 import type { StudyEstado } from '../types'
+import { toast } from '../lib/toast'
 
 const TABS = ['📁 FASE 1 — Pre-campo', '📁 FASE 2 — Campo', '📁 FASE 3 — Post-campo', '☁ Google Drive']
 
@@ -88,6 +89,11 @@ export default function DetallePage() {
       queryClient.invalidateQueries({ queryKey: ['study', id] })
       setUrlsSaved(true)
       setTimeout(() => setUrlsSaved(false), 3000)
+      toast.success('URLs guardadas', 'Las carpetas de Drive quedaron registradas correctamente.')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail ?? 'No se pudieron guardar las URLs.'
+      toast.error('Error al guardar', msg)
     },
   })
 
@@ -96,12 +102,15 @@ export default function DetallePage() {
       const { url } = await getDriveAuthUrl()
       window.location.href = url
     } catch {
-      alert('No se pudo obtener la URL de autorización de Google Drive.')
+      toast.error('Error de conexión', 'No se pudo obtener la URL de autorización de Google Drive.')
     }
   }
 
   async function handleListFolder(url: string, fase: 'FASE1' | 'FASE2' | 'FASE3') {
-    if (!url) return
+    if (!url) {
+      toast.warning('URL requerida', 'Primero escribe y guarda la URL de la carpeta de Drive.')
+      return
+    }
     setIsListing(true)
     setListError(null)
     setFolderFiles([])
@@ -112,10 +121,16 @@ export default function DetallePage() {
     try {
       const result = await listDriveFolder(url)
       setFolderFiles(result.items)
-      // Auto-select procesables (PDF/DOCX)
-      setSelectedIds(new Set(result.items.filter(f => f.is_procesable).map(f => f.id)))
+      const procesables = result.items.filter(f => f.is_procesable)
+      setSelectedIds(new Set(procesables.map(f => f.id)))
+      toast.success(
+        `${result.total} archivos encontrados`,
+        `${procesables.length} PDF/DOCX seleccionados automáticamente para análisis.`
+      )
     } catch (err: any) {
-      setListError(err?.response?.data?.detail ?? 'Error al listar la carpeta de Drive. Verifica la URL y la conexión.')
+      const msg = err?.response?.data?.detail ?? 'Error al listar la carpeta de Drive. Verifica la URL y la conexión.'
+      setListError(msg)
+      toast.error('Error al leer carpeta', msg)
     } finally {
       setIsListing(false)
     }
@@ -156,6 +171,18 @@ export default function DetallePage() {
     setIsProcessing(false)
     queryClient.invalidateQueries({ queryKey: ['corpus', id] })
     queryClient.invalidateQueries({ queryKey: ['study', id] })
+
+    if (errors.length === 0) {
+      toast.success(
+        '¡Análisis completado!',
+        `${results.length} archivo${results.length !== 1 ? 's' : ''} procesado${results.length !== 1 ? 's' : ''} y guardados en el corpus.`
+      )
+    } else {
+      toast.warning(
+        `${results.length} ok · ${errors.length} con error`,
+        'Algunos archivos no pudieron procesarse. Revisa los detalles abajo.'
+      )
+    }
   }
 
   function toggleSelect(fileId: string, checked: boolean) {
@@ -641,17 +668,19 @@ export default function DetallePage() {
                   </div>
 
                   {/* Barra de procesamiento */}
-                  <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+                  <div style={{ padding: '16px 18px', borderTop: '1px solid var(--border)' }}>
                     {isProcessing ? (
-                      <>
-                        <div style={{ fontSize: 12, marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
-                          <span>⚡ {processProgress.done}/{processProgress.total} — <em>{processProgress.currentName}</em></span>
-                          <span className="text-muted">{Math.round(pct)}%</span>
+                      <div className="drive-progress-panel">
+                        <div className="drive-progress-title">⚡ Analizando archivos…</div>
+                        <div className="drive-progress-file">📄 {processProgress.currentName}</div>
+                        <div className="drive-progress-bar-wrap">
+                          <div className="drive-progress-bar-fill" style={{ width: `${pct}%` }} />
                         </div>
-                        <div className="progress-bar-wrap" style={{ height: 6 }}>
-                          <div className="progress-bar" style={{ width: `${pct}%`, transition: 'width 0.3s ease' }} />
+                        <div className="drive-progress-stats">
+                          <span><strong>{processProgress.done}</strong> de <strong>{processProgress.total}</strong> archivos</span>
+                          <span><strong>{Math.round(pct)}%</strong> completado</span>
                         </div>
-                      </>
+                      </div>
                     ) : (
                       <div className="flex gap-2" style={{ alignItems: 'center' }}>
                         <button
@@ -664,18 +693,6 @@ export default function DetallePage() {
                         <span className="text-sm text-muted">
                           {selectedIds.size} de {folderFiles.length} seleccionados
                         </span>
-                      </div>
-                    )}
-
-                    {!isProcessing && processResults.length > 0 && (
-                      <div className="alert alert-success" style={{ marginTop: 10, fontSize: 12 }}>
-                        ✓ {processResults.length} archivo{processResults.length !== 1 ? 's' : ''} procesado{processResults.length !== 1 ? 's' : ''}.
-                        {processErrors.length > 0 && ` ${processErrors.length} con error.`}
-                      </div>
-                    )}
-                    {!isProcessing && processErrors.length > 0 && processResults.length === 0 && (
-                      <div className="alert alert-error" style={{ marginTop: 10, fontSize: 12 }}>
-                        ✗ Todos los archivos fallaron. Verifica la conexión con Drive.
                       </div>
                     )}
                   </div>

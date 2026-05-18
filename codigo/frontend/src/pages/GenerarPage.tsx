@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getStudy, getCorpusFiles, processCorpus, runGisAnalysis, generateReport, getReports } from '../api/studies'
 import type { StudyDetail } from '../types'
 import type { Report } from '../types'
+import { toast } from '../lib/toast'
 
 type GenStep = 'idle' | 'extracting' | 'gis' | 'writing' | 'done' | 'error'
 
@@ -158,11 +159,13 @@ export default function GenerarPage() {
       }))
 
       setStep('done')
-      setTimeout(() => navigate(`/estudios/${id}/revision`), 1500)
+      toast.success('¡Informe generado!', 'Redirigiendo a la vista de revisión…')
+      setTimeout(() => navigate(`/estudios/${id}/revision`), 1800)
     } catch (err: any) {
       const msg = err?.response?.data?.detail ?? err?.message ?? 'Error desconocido'
       setErrorMsg(msg)
       setStep('error')
+      toast.error('Error en la generación', msg)
     }
   }
 
