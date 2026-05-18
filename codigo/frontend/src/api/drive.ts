@@ -5,20 +5,9 @@ export interface DriveStatus {
   google_email?: string | null
 }
 
-export interface SyncPhaseResult {
+export interface SyncStarted {
+  status: string
   study_id: string
-  fase: string
-  files_found: number
-  files_downloaded: number
-  files_skipped: number
-  errors: string[]
-}
-
-export interface StudySyncResponse {
-  study_id: string
-  fases: SyncPhaseResult[]
-  total_downloaded: number
-  total_errors: number
 }
 
 export async function getDriveStatus(): Promise<DriveStatus> {
@@ -35,7 +24,7 @@ export async function revokeDrive(): Promise<void> {
   await client.delete('drive/revoke')
 }
 
-export async function syncStudy(studyId: string): Promise<StudySyncResponse> {
-  const { data } = await client.post<StudySyncResponse>(`drive/sync/${studyId}`)
+export async function syncStudy(studyId: string): Promise<SyncStarted> {
+  const { data } = await client.post<SyncStarted>(`drive/sync/${studyId}`)
   return data
 }

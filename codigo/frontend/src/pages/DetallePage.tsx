@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { MapContainer, TileLayer, CircleMarker, LayerGroup, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import IndigenousDivider from '../components/IndigenousDivider'
 import { getStudy, getCorpusFiles, updateStudy, getGisGeojson } from '../api/studies'
-import { getDriveStatus, getDriveAuthUrl, syncStudy, type StudySyncResponse } from '../api/drive'
+import { getDriveStatus, getDriveAuthUrl, syncStudy } from '../api/drive'
 import { ESTADO_LABEL, ESTADO_BADGE } from './estadoUtils'
 import type { StudyEstado } from '../types'
 
@@ -22,13 +22,20 @@ export default function DetallePage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState(0)
   const [driveUrls, setDriveUrls] = useState({ fase1: '', fase2: '', fase3: '' })
-  const [syncResult, setSyncResult] = useState<StudySyncResponse | null>(null)
+  const [syncStarted, setSyncStarted] = useState(false)
+  const [syncElapsed, setSyncElapsed] = useState(0)
   const [urlsSaved, setUrlsSaved] = useState(false)
+  const prevEstadoRef = useRef<string | undefined>(undefined)
+  const syncStartRef = useRef<number | null>(null)
 
   const { data: study, isLoading, isError } = useQuery({
     queryKey: ['study', id],
     queryFn: () => getStudy(id!),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const s = query.state.data
+      return s?.estado === 'sincronizando' ? 3000 : false
+    },
   })
 
   const { data: corpus = [] } = useQuery({
@@ -58,7 +65,34 @@ export default function DetallePage() {
         fase3: study.url_drive_fase3 ?? '',
       })
     }
-  }, [study])
+  }, [study?.id])
+
+  // Cuando termina la sincronización, refrescar el corpus
+  useEffect(() => {
+    if (prevEstadoRef.current === 'sincronizando' && study?.estado !== 'sincronizando') {
+      queryClient.invalidateQueries({ queryKey: ['corpus', id] })
+    }
+    prevEstadoRef.current = study?.estado
+  }, [study?.estado])
+
+  // Timer de tiempo transcurrido durante la sincronización
+  useEffect(() => {
+    const isSyncing = syncMutation.isPending || study?.estado === 'sincronizando'
+    if (!isSyncing) {
+      syncStartRef.current = null
+      setSyncElapsed(0)
+      return
+    }
+    if (syncStartRef.current === null) {
+      syncStartRef.current = Date.now()
+    }
+    const interval = setInterval(() => {
+      if (syncStartRef.current !== null) {
+        setSyncElapsed(Math.floor((Date.now() - syncStartRef.current) / 1000))
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [syncMutation.isPending, study?.estado])
 
   const saveUrlsMutation = useMutation({
     mutationFn: () => updateStudy(id!, {
@@ -75,12 +109,13 @@ export default function DetallePage() {
 
   const syncMutation = useMutation({
     mutationFn: () => syncStudy(id!),
-    onSuccess: (result) => {
-      setSyncResult(result)
-      queryClient.invalidateQueries({ queryKey: ['corpus', id] })
+    onSuccess: () => {
+      setSyncStarted(true)
       queryClient.invalidateQueries({ queryKey: ['study', id] })
     },
   })
+
+  const isSyncing = syncMutation.isPending || study?.estado === 'sincronizando'
 
   async function handleConnectDrive() {
     try {
@@ -446,9 +481,9 @@ export default function DetallePage() {
                 <button
                   className="btn btn-primary"
                   onClick={() => syncMutation.mutate()}
-                  disabled={syncMutation.isPending || (!driveUrls.fase1 && !driveUrls.fase2)}
+                  disabled={isSyncing || (!driveUrls.fase1 && !driveUrls.fase2)}
                 >
-                  {syncMutation.isPending ? '⏳ Sincronizando…' : '🔄 Sincronizar corpus'}
+                  {isSyncing ? '⏳ Sincronizando…' : '🔄 Sincronizar corpus'}
                 </button>
               </div>
 
@@ -459,74 +494,82 @@ export default function DetallePage() {
                 <div className="alert alert-error" style={{ marginTop: 12 }}>✗ Error al guardar las URLs.</div>
               )}
               {syncMutation.isError && (
-                <div className="alert alert-error" style={{ marginTop: 12 }}>✗ Error al sincronizar. Verifica que las URLs sean correctas y que Drive esté conectado.</div>
+                <div className="alert alert-error" style={{ marginTop: 12 }}>✗ Error al iniciar la sincronización. Verifica que las URLs sean correctas y que Drive esté conectado.</div>
+              )}
+              {isSyncing && study?.estado === 'sincronizando' && (
+                <div className="alert alert-info" style={{ marginTop: 12, fontSize: 12 }}>
+                  ℹ La sincronización corre en segundo plano. Puedes navegar a otras páginas y volver más tarde.
+                </div>
               )}
             </div>
           </div>
 
-          {/* Panel derecho: resultado de sincronización */}
+          {/* Panel derecho: estado de sincronización */}
           <div className="card">
             <div className="card-header">
-              <span className="section-title" style={{ margin: 0 }}>Resultado de sincronización</span>
+              <span className="section-title" style={{ margin: 0 }}>Estado de sincronización</span>
             </div>
             <div className="card-body">
-              {!syncResult && !syncMutation.isPending && (
-                <div className="empty-state" style={{ padding: 32 }}>
-                  <div className="empty-state-icon">☁</div>
-                  <p>Aún no se ha sincronizado este estudio.</p>
-                  <p className="text-sm text-muted">Ingresa las URLs de Drive y haz clic en "Sincronizar corpus".</p>
-                </div>
-              )}
-
-              {syncMutation.isPending && (
-                <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-                  <div>Descargando archivos desde Google Drive…</div>
-                  <div className="text-sm text-muted" style={{ marginTop: 6 }}>Esto puede tomar algunos segundos.</div>
-                </div>
-              )}
-
-              {syncResult && (
-                <>
-                  <div className="flex gap-3" style={{ marginBottom: 16 }}>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 700, color: 'var(--primary)' }}>
-                        {syncResult.total_downloaded}
-                      </div>
-                      <div className="text-sm text-muted">Descargados</div>
-                    </div>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 700 }}>
-                        {syncResult.fases.reduce((s, f) => s + f.files_skipped, 0)}
-                      </div>
-                      <div className="text-sm text-muted">Sin cambios</div>
-                    </div>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 700, color: syncResult.total_errors > 0 ? '#dc2626' : 'var(--text-muted)' }}>
-                        {syncResult.total_errors}
-                      </div>
-                      <div className="text-sm text-muted">Errores</div>
+              {isSyncing ? (
+                <div style={{ textAlign: 'center', padding: 32 }}>
+                  <div style={{ fontSize: 36, marginBottom: 12 }}>⟳</div>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Descargando archivos de Google Drive…</div>
+                  <div className="text-sm text-muted">
+                    {corpus.length > 0 ? `${corpus.length} archivos registrados hasta ahora` : 'Conectando con Drive…'}
+                  </div>
+                  <div style={{ margin: '20px auto', maxWidth: 280 }}>
+                    <div className="progress-bar-wrap" style={{ height: 8 }}>
+                      <div className="progress-bar" style={{ width: '70%' }} />
                     </div>
                   </div>
-
-                  {syncResult.fases.map((fase) => (
-                    <div key={fase.fase} style={{ marginBottom: 10 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                        <span>📂 {fase.fase}</span>
-                        <span className="text-muted">{fase.files_found} encontrados · {fase.files_downloaded} nuevos · {fase.files_skipped} sin cambios</span>
-                      </div>
-                      {fase.errors.length > 0 && fase.errors.map((err, i) => (
-                        <div key={i} className="alert alert-error" style={{ fontSize: 11, padding: '4px 8px', marginTop: 2 }}>✗ {err}</div>
-                      ))}
+                  <div className="text-sm text-muted">
+                    ⏱ {Math.floor(syncElapsed / 60)}:{String(syncElapsed % 60).padStart(2, '0')} transcurridos
+                  </div>
+                  <div className="text-sm text-muted" style={{ marginTop: 4 }}>
+                    Puede tomar varios minutos según el tamaño del corpus
+                  </div>
+                </div>
+              ) : corpus.length > 0 ? (
+                <>
+                  {syncStarted && (
+                    <div className="alert alert-success" style={{ marginBottom: 16 }}>
+                      ✓ Sincronización completada exitosamente.
                     </div>
-                  ))}
-
-                  {syncResult.total_errors === 0 && (
-                    <div className="alert alert-success" style={{ marginTop: 8 }}>
-                      ✓ Sincronización completada. Los archivos ya están disponibles en las pestañas de fase.
+                  )}
+                  <div className="flex gap-3" style={{ marginBottom: 16 }}>
+                    {[
+                      { label: 'Total', value: corpus.length, unit: 'archivos' },
+                      { label: 'FASE 1', value: corpus.filter((f: any) => f.fase === 'FASE1').length, unit: 'docs' },
+                      { label: 'FASE 2', value: corpus.filter((f: any) => f.fase === 'FASE2').length, unit: 'arch.' },
+                      { label: 'FASE 3', value: corpus.filter((f: any) => f.fase === 'FASE3').length, unit: 'docs' },
+                    ].map((m) => (
+                      <div key={m.label} style={{ textAlign: 'center', flex: 1 }}>
+                        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700, color: 'var(--primary)' }}>
+                          {m.value}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.4px' }}>{m.label}</div>
+                        <div className="text-sm text-muted">{m.unit}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="alert alert-info" style={{ fontSize: 12 }}>
+                    ✓ El corpus está disponible en las pestañas de fase para revisión.
+                  </div>
+                  {study?.error_msg && (
+                    <div className="alert alert-warning" style={{ marginTop: 8, fontSize: 12 }}>
+                      ⚠ {study.error_msg}
                     </div>
                   )}
                 </>
+              ) : (
+                <div className="empty-state" style={{ padding: 32 }}>
+                  <div className="empty-state-icon">☁</div>
+                  <p>Aún no se ha sincronizado este estudio.</p>
+                  {study?.error_msg && (
+                    <div className="alert alert-error" style={{ marginTop: 8, fontSize: 12 }}>✗ {study.error_msg}</div>
+                  )}
+                  <p className="text-sm text-muted">Ingresa las URLs de Drive y haz clic en "Sincronizar corpus".</p>
+                </div>
               )}
             </div>
           </div>

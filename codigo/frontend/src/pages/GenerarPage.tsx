@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getStudy, getCorpusFiles, processCorpus, runGisAnalysis, generateReport, getReports } from '../api/studies'
@@ -19,6 +19,8 @@ export default function GenerarPage() {
   const [step, setStep] = useState<GenStep>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [stepDetails, setStepDetails] = useState<Record<string, string>>({})
+  const [elapsed, setElapsed] = useState(0)
+  const genStartRef = useRef<number | null>(null)
 
   const { data: study, isLoading: studyLoading } = useQuery({
     queryKey: ['study', id],
@@ -31,6 +33,23 @@ export default function GenerarPage() {
     queryFn: () => getCorpusFiles(id!),
     enabled: !!id,
   })
+
+  // Timer global desde que comienza la generación
+  useEffect(() => {
+    const isActive = step !== 'idle' && step !== 'done' && step !== 'error'
+    if (!isActive) {
+      genStartRef.current = null
+      setElapsed(0)
+      return
+    }
+    if (genStartRef.current === null) genStartRef.current = Date.now()
+    const interval = setInterval(() => {
+      if (genStartRef.current !== null) {
+        setElapsed(Math.floor((Date.now() - genStartRef.current) / 1000))
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [step])
 
   if (studyLoading || corpusLoading) return <div className="loading-state">Cargando estudio…</div>
 
@@ -64,7 +83,7 @@ export default function GenerarPage() {
 
   async function pollStudy(
     until: (s: StudyDetail) => boolean,
-    timeout = 300_000,
+    timeout = 1_200_000,
   ): Promise<StudyDetail> {
     const deadline = Date.now() + timeout
     while (Date.now() < deadline) {
@@ -73,10 +92,10 @@ export default function GenerarPage() {
       if (s.estado === 'error') throw new Error(s.error_msg ?? 'Error procesando estudio')
       if (until(s)) return s
     }
-    throw new Error('Tiempo de espera agotado')
+    throw new Error('Tiempo de espera agotado (20 min). El proceso sigue corriendo en el servidor; recarga la página en unos minutos.')
   }
 
-  async function pollReport(reportId: string, timeout = 300_000): Promise<Report> {
+  async function pollReport(reportId: string, timeout = 1_200_000): Promise<Report> {
     const deadline = Date.now() + timeout
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 3000))
@@ -87,6 +106,12 @@ export default function GenerarPage() {
       if (r.estado === 'error') throw new Error(r.error_msg ?? 'Error generando informe')
     }
     throw new Error('Tiempo de espera agotado generando informe')
+  }
+
+  function formatElapsed(secs: number): string {
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`
   }
 
   async function handleGenerate() {
@@ -331,6 +356,10 @@ export default function GenerarPage() {
                       transition: 'width 0.5s ease',
                     }}
                   />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                  <span>⏱ {formatElapsed(elapsed)} transcurridos</span>
+                  <span>El proceso puede tomar 5–20 min</span>
                 </div>
               </div>
             )}

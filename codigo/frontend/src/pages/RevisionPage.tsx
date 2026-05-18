@@ -6,31 +6,22 @@ import { getStudy, getReports, generateReport, approveReport, downloadReportBlob
 import type { Extraction } from '../api/studies'
 import type { Report } from '../types'
 
-const TOC_ITEMS = [
-  { id: 's1', label: '1. Portada institucional', ok: true, warn: false },
-  { id: 's2', label: '2. Vista general comunidad', ok: true, warn: false },
-  { id: 's3', label: '3. Contexto territorial', ok: true, warn: false },
-  { id: 's4a', label: '4.1 Prácticas Culturales', ok: true, warn: false, sub: true },
-  { id: 's4b', label: '4.2 Expresiones Simbólicas', ok: true, warn: false, sub: true },
-  { id: 's4c', label: '4.3 Entornos Territoriales', ok: true, warn: false, sub: true },
-  { id: 's4d', label: '4.4 Procesos Organizativos', ok: true, warn: false, sub: true },
-  { id: 's5a', label: '5.1 Buffers de influencia', ok: true, warn: false, sub: true },
-  { id: 's5b', label: '5.2 Matrices de distancia', ok: true, warn: false, sub: true },
-  { id: 's5c', label: '5.3 Superposiciones territoriales', ok: true, warn: false, sub: true },
-  { id: 's6a', label: '6.1 Discrepancias poblacionales', ok: false, warn: true, sub: true },
-  { id: 's6b', label: '6.2 Cruce con DANE', ok: true, warn: false, sub: true },
-  { id: 's6c', label: '6.3 Red de actores', ok: true, warn: false, sub: true },
-  { id: 's6d', label: '6.4 Línea de tiempo', ok: true, warn: false, sub: true },
-  { id: 's7', label: '7. Evidencia documental', ok: true, warn: false },
-  { id: 's8', label: '8. Anexos cartográficos', ok: true, warn: false },
-  { id: 's9', label: '9. Referencias', ok: true, warn: false },
+const REAL_SECTIONS = [
+  { id: 'portada', label: 'Portada institucional' },
+  { id: 's1', label: 'I. Información General' },
+  { id: 's2', label: 'II. Marco Legal y Normativo' },
+  { id: 's3', label: 'III. Historia y Contexto' },
+  { id: 's4', label: 'IV. Caracterización Etnológica' },
+  { id: 's4a', label: '4.1 Prácticas Culturales', sub: true },
+  { id: 's4b', label: '4.2 Expresiones Simbólicas', sub: true },
+  { id: 's4c', label: '4.3 Entornos Territoriales', sub: true },
+  { id: 's4d', label: '4.4 Procesos Organizativos', sub: true },
+  { id: 's5', label: 'V. Análisis Georreferenciado' },
+  { id: 's5a', label: '5.1 Distribución territorial', sub: true },
+  { id: 's5b', label: '5.2 Matrices de distancia', sub: true },
+  { id: 's5c', label: '5.3 Solapamientos espaciales', sub: true },
+  { id: 's6', label: 'VI. Conclusiones y Recomendaciones' },
 ]
-
-const SECTION_HEADERS: Record<string, string> = {
-  s4a: '4. Análisis SIG por capa',
-  s5a: '5. Análisis espacial integrado',
-  s6a: '6. Módulos de valor agregado',
-}
 
 // Agrupa las extracciones poblacionales por archivo fuente y arma las filas de la tabla
 function buildPoblacionRows(extractions: Extraction[]) {
@@ -292,37 +283,37 @@ export default function RevisionPage() {
           </div>
           <div className="card-body" style={{ padding: 12 }}>
             <div className="report-toc">
-              {TOC_ITEMS.map((item) => {
-                const showHeader = SECTION_HEADERS[item.id]
-                return (
-                  <div key={item.id}>
-                    {showHeader && <div className="toc-section">{showHeader}</div>}
-                    <div
-                      className={`toc-item${item.sub ? ' toc-sub' : ''}${activeSection === item.id ? ' active' : ''}${item.warn ? ' warn' : ''}`}
-                      onClick={() => setActiveSection(item.id)}
-                    >
-                      <span>{item.label}</span>
-                      <span className={`badge ${item.warn ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: 10 }}>
-                        {item.warn ? '⚠' : '✓'}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
+              {REAL_SECTIONS.map((item) => (
+                <div
+                  key={item.id}
+                  className={`toc-item${item.sub ? ' toc-sub' : ''}${activeSection === item.id ? ' active' : ''}`}
+                  onClick={() => setActiveSection(item.id)}
+                >
+                  <span>{item.label}</span>
+                  <span className="badge badge-success" style={{ fontSize: 10 }}>✓</span>
+                </div>
+              ))}
             </div>
           </div>
           <div className="card-footer">
             <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
-              16/17 secciones aprobadas · 1 requiere revisión
+              {REAL_SECTIONS.length} secciones · v{report.version}
             </div>
           </div>
         </div>
 
         {/* Document preview */}
         <div>
-          <div className="alert alert-warning" style={{ marginBottom: 12 }}>
-            ⚠&nbsp;<div><strong>Sección 6.1 requiere revisión:</strong> Se detectó discrepancia entre fuentes poblacionales. Verifique y confirme la nota aclaratoria antes de aprobar.</div>
-          </div>
+          {(() => {
+            const rows = buildPoblacionRows(extractions)
+            const valores = rows.map(r => parseInt(r.familias) || 0).filter(Boolean)
+            const hayDiscrepancia = valores.length > 1 && Math.max(...valores) !== Math.min(...valores)
+            return hayDiscrepancia ? (
+              <div className="alert alert-warning" style={{ marginBottom: 12 }}>
+                ⚠ <strong>Discrepancia poblacional detectada:</strong> Se encontraron diferencias entre fuentes del corpus. Revise la tabla antes de aprobar.
+              </div>
+            ) : null
+          })()}
 
           <div className="doc-preview">
             <div className="doc-h1">ESTUDIO ETNOLÓGICO<br />{study.nombre_comunidad.toUpperCase()}</div>
@@ -332,35 +323,38 @@ export default function RevisionPage() {
 
             <IndigenousDivider patternId="doc-revision-div" variant="wayuu" />
 
-            <div className="doc-h2">6.1 Validación de discrepancias entre fuentes poblacionales</div>
-            <p className="doc-p">
-              Con el fin de garantizar la consistencia de la información demográfica de {study.nombre_comunidad},
-              el sistema realizó el cruce automático de las fuentes disponibles en el corpus:
-            </p>
+            <div className="doc-h2">I. Información General</div>
+            {[
+              ['Comunidad', study.nombre_comunidad],
+              ['Pueblo indígena', study.pueblo_indigena ?? '—'],
+              ['Municipio / Departamento', `${study.municipio}, ${study.departamento}`],
+              ['Vereda', study.vereda ?? '—'],
+              ['NIT', study.nit_comunidad ?? '—'],
+              ['Contrato', study.contrato_referencia ?? '—'],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', gap: 8, fontSize: 12, marginBottom: 4 }}>
+                <strong style={{ minWidth: 200, color: 'var(--text-muted)' }}>{k}:</strong>
+                <span>{v}</span>
+              </div>
+            ))}
 
+            <div className="doc-h2" style={{ marginTop: 16 }}>Datos Poblacionales Extraídos del Corpus</div>
             <PoblacionTable extractions={extractions} />
 
-            {(() => {
-              const discrepancias = extractions.filter(e => e.tipo_dato === 'discrepancia_poblacion')
-              if (!discrepancias.length) return null
-              return (
-                <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 'var(--radius)', padding: 12, fontSize: 12.5, color: '#92400e', margin: '12px 0' }}>
-                  <strong>⚠ Discrepancias detectadas:</strong>
-                  {discrepancias.map((d, i) => (
-                    <div key={i} style={{ marginTop: 4 }}>{d.valor}</div>
-                  ))}
-                  <br />
-                  <em>[El responsable técnico debe validar esta información antes de aprobar el informe]</em>
-                </div>
-              )
-            })()}
+            {extractions.filter(e => e.tipo_dato === 'discrepancia_poblacion').length > 0 && (
+              <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 'var(--radius)', padding: 12, fontSize: 12.5, color: '#92400e', margin: '12px 0' }}>
+                <strong>⚠ Discrepancias detectadas en el corpus:</strong>
+                {extractions.filter(e => e.tipo_dato === 'discrepancia_poblacion').map((d, i) => (
+                  <div key={i} style={{ marginTop: 4 }}>{d.valor}</div>
+                ))}
+                <br />
+                <em>[El responsable técnico debe validar esta información antes de aprobar el informe]</em>
+              </div>
+            )}
 
-            <div className="doc-h2">6.2 Cruce con datos abiertos del DANE</div>
-            <p className="doc-p">
-              Según el Censo Nacional de Población y Vivienda 2018 (DANE), el municipio de {study.municipio} — {study.departamento} registra
-              una población registrada. El cabildo {study.nombre_comunidad} pertenece al pueblo {study.pueblo_indigena ?? 'indígena'} y
-              se encuentra en proceso de reconocimiento formal ante la DAIRM del Ministerio del Interior.
-            </p>
+            <div style={{ marginTop: 20, padding: 12, background: 'var(--bg-alt)', borderRadius: 'var(--radius)', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+              📄 Descarga el <strong>.docx</strong> o abre el <strong>PDF en Drive</strong> para revisar el informe completo con todas las secciones, análisis SIG y conclusiones.
+            </div>
           </div>
         </div>
       </div>

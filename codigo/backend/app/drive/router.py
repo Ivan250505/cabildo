@@ -1,23 +1,41 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.database import get_db
+from app.database import get_db, AsyncSessionLocal
 from app.auth.service import get_current_user, require_tecnico
 from app.auth.models import User
+from app.studies.models import Study
 from app.drive import service
 from app.drive.schemas import (
     DriveAuthUrlResponse,
     DriveStatusResponse,
     FolderListResponse,
-    StudySyncResponse,
 )
 
 router = APIRouter(prefix="/api/drive", tags=["drive"])
 settings = get_settings()
+
+
+async def _bg_sync(study_id: UUID, user_id: UUID) -> None:
+    async with AsyncSessionLocal() as db:
+        try:
+            user = await db.get(User, user_id)
+            if not user:
+                return
+            await service.sync_study(db, user, study_id)
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            async with AsyncSessionLocal() as db2:
+                study = await db2.get(Study, study_id)
+                if study and study.estado == "sincronizando":
+                    study.estado = "borrador"
+                    study.error_msg = f"Sync fallido: {str(exc)[:300]}"
+                    await db2.commit()
 
 
 @router.get("/auth-url", response_model=DriveAuthUrlResponse)
@@ -83,16 +101,22 @@ async def list_folder(
     return service.list_folder_files(current_user, folder_id)
 
 
-@router.post("/sync/{study_id}", response_model=StudySyncResponse)
+@router.post("/sync/{study_id}", status_code=202)
 async def sync_study(
     study_id: UUID,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_tecnico),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Descarga todos los archivos del corpus de un estudio desde Drive.
-    Crea o actualiza los registros StudyCorpus correspondientes.
+    Inicia la sincronización del corpus desde Google Drive en segundo plano.
+    Devuelve 202 inmediatamente; sondea GET /api/studies/{id} para ver el estado.
     """
-    result = await service.sync_study(db, current_user, study_id)
+    r = await db.execute(select(Study).where(Study.id == study_id))
+    study = r.scalar_one_or_none()
+    if not study:
+        raise HTTPException(status_code=404, detail="Estudio no encontrado")
+    study.estado = "sincronizando"
     await db.commit()
-    return result
+    background_tasks.add_task(_bg_sync, study_id, current_user.id)
+    return {"status": "sincronizando", "study_id": str(study_id)}
