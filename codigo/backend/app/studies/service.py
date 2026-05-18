@@ -73,7 +73,7 @@ async def create_study(db: AsyncSession, data: StudyCreate, created_by: UUID) ->
 
 async def update_study(db: AsyncSession, study_id: UUID, data: StudyUpdate) -> Study:
     study = await get_study_or_404(db, study_id)
-    if study.estado not in ("borrador", "error"):
+    if study.estado in ("generando", "informe_ok"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"No se puede editar un estudio en estado '{study.estado}'",
