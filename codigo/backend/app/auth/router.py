@@ -75,6 +75,25 @@ async def me(current_user: User = Depends(get_current_user)):
     return schemas.UserPublic.model_validate(current_user)
 
 
+@router.post("/seed-admin", status_code=201, include_in_schema=False)
+async def seed_admin(data: schemas.LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Crea el primer usuario admin si la tabla users está vacía. Solo funciona una vez."""
+    from sqlalchemy import func, select
+    count = await db.scalar(select(func.count()).select_from(User))
+    if count > 0:
+        raise HTTPException(status_code=409, detail="Ya existen usuarios. Endpoint deshabilitado.")
+    admin = User(
+        nombre_completo="Administrador",
+        email=data.email,
+        password_hash=hash_password(data.password),
+        rol="admin",
+        estado="activo",
+    )
+    db.add(admin)
+    await db.commit()
+    return {"ok": True, "email": data.email}
+
+
 @router.put("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(
     data: schemas.ChangePasswordRequest,

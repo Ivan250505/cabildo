@@ -16,7 +16,12 @@ class Settings(BaseSettings):
     FERNET_KEY: str
 
     # CORS
-    ALLOWED_ORIGINS: str = "http://localhost:5173"
+    ALLOWED_ORIGINS: str = (
+        "https://etnograficos.onrender.com,"
+        "http://localhost:5173,"
+        "http://localhost:5174,"
+        "http://localhost:3000"
+    )
 
     @property
     def allowed_origins_list(self) -> list[str]:
