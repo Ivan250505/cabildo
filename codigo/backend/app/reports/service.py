@@ -18,6 +18,7 @@ from app.studies.models import (
     CorpusExtraction, GISResult, Report, Study, StudyCorpus
 )
 from app.reports.builder import build_report
+from app.documents.ai_writer import generate_sections
 
 settings = get_settings()
 
@@ -136,12 +137,22 @@ async def generate_report(
         "buffer_metros": study.buffer_metros,
     }
 
+    # IA: generar texto narrativo de las secciones del informe
+    ai_content = generate_sections(
+        study_data=study_dict,
+        extracciones=extracciones,
+        provider=settings.AI_PROVIDER,
+        api_key=settings.AI_API_KEY,
+        model=settings.AI_MODEL,
+    )
+
     docx_bytes = build_report(
         study_data=study_dict,
         extracciones=extracciones,
         gis_results=gis_results,
         mapa_general_png=mapa_general_png,
         mapas_por_capa_png=mapas_por_capa if mapas_por_capa else None,
+        ai_content=ai_content,
     )
 
     # Guardar en disco

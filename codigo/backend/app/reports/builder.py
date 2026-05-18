@@ -428,9 +428,30 @@ def _add_analisis_sig(
             cap.runs[0].italic = True
 
 
-# ── Sección IV — Caracterización etnológica ───────────────────────────────────
+# ── Sección IV — Historia y contexto ─────────────────────────────────────────
 
-def _add_caracterizacion(doc: Document, extracciones: list[dict]) -> None:
+def _add_historia(doc: Document, ai_content: dict) -> None:
+    _heading1(doc, "III. Historia y Contexto de la Comunidad")
+    texto = ai_content.get("historia")
+    if texto:
+        for parrafo in texto.split("\n\n"):
+            parrafo = parrafo.strip()
+            if parrafo:
+                _body(doc, parrafo)
+    else:
+        _body(
+            doc,
+            "La historia de la comunidad, su origen y los antecedentes del proceso "
+            "de reconocimiento ante el Ministerio del Interior reposan en el corpus "
+            "documental anexo, en particular en la reseña histórica y las actas de "
+            "elección de autoridades tradicionales.",
+            italic=True,
+        )
+
+
+# ── Sección V — Caracterización etnológica ────────────────────────────────────
+
+def _add_caracterizacion(doc: Document, extracciones: list[dict], ai_content: dict) -> None:
     _heading1(doc, "IV. Caracterización Etnológica")
 
     _body(
@@ -440,70 +461,90 @@ def _add_caracterizacion(doc: Document, extracciones: list[dict]) -> None:
         "organizados según las cuatro dimensiones temáticas de la investigación.",
     )
 
-    secciones = {
-        "Prácticas Culturales": ["practica", "cultural", "tradicion"],
-        "Expresiones Simbólicas": ["simbolo", "expresion", "ritual", "ceremonia"],
-        "Entornos Territoriales": ["territorio", "entorno", "sitio", "lugar"],
-        "Procesos Organizativos": ["organizacion", "autoridad", "gobernanza", "proceso"],
-    }
+    subsecciones = [
+        ("Prácticas Culturales", "practicas_culturales"),
+        ("Expresiones Simbólicas", "expresiones_simbolicas"),
+        ("Entornos Territoriales", "entornos_territoriales"),
+        ("Procesos Organizativos", "procesos_organizativos"),
+    ]
 
-    for titulo, palabras_clave in secciones.items():
+    for titulo, ai_key in subsecciones:
         _heading2(doc, titulo)
-        relevantes = [
-            e for e in extracciones
-            if any(k in (e.get("tipo_dato", "") + " " + (e.get("valor") or "")).lower()
-                   for k in palabras_clave)
-        ]
-        if relevantes:
-            for e in relevantes[:8]:
-                valor = e.get("valor", "").strip()
-                if valor:
-                    p = doc.add_paragraph(f"• {valor}", style="List Bullet")
-                    p.runs[0].font.size = Pt(11)
-                    p.runs[0].font.name = "Calibri"
+        texto_ia = ai_content.get(ai_key)
+        if texto_ia:
+            for parrafo in texto_ia.split("\n\n"):
+                parrafo = parrafo.strip()
+                if parrafo:
+                    _body(doc, parrafo)
         else:
-            _body(
-                doc,
-                "Información recopilada durante el trabajo de campo. Ver corpus documental anexo.",
-                italic=True,
-            )
+            # Fallback: filtrar extracciones por palabras clave
+            palabras = {
+                "practicas_culturales": ["practica", "cultural", "tradicion", "actividad_cultural"],
+                "expresiones_simbolicas": ["simbolo", "expresion", "ritual", "ceremonia"],
+                "entornos_territoriales": ["territorio", "entorno", "sitio", "lugar"],
+                "procesos_organizativos": ["organizacion", "autoridad", "gobernanza", "representante"],
+            }
+            claves = palabras.get(ai_key, [])
+            relevantes = [
+                e for e in extracciones
+                if any(k in (e.get("tipo_dato", "") + " " + (e.get("valor") or "")).lower()
+                       for k in claves)
+            ]
+            if relevantes:
+                for e in relevantes[:8]:
+                    valor = e.get("valor", "").strip()
+                    if valor:
+                        p = doc.add_paragraph(f"• {valor}", style="List Bullet")
+                        p.runs[0].font.size = Pt(11)
+                        p.runs[0].font.name = "Calibri"
+            else:
+                _body(
+                    doc,
+                    "Información recopilada durante el trabajo de campo. Ver corpus documental anexo.",
+                    italic=True,
+                )
 
 
-# ── Sección V — Conclusiones ──────────────────────────────────────────────────
+# ── Sección VI — Conclusiones ─────────────────────────────────────────────────
 
-def _add_conclusiones(doc: Document, study_data: dict, n_capas: int, n_puntos: int) -> None:
+def _add_conclusiones(doc: Document, study_data: dict, n_capas: int, n_puntos: int, ai_content: dict) -> None:
     _heading1(doc, "V. Conclusiones y Recomendaciones")
 
-    comunidad = study_data.get("nombre_comunidad", "la comunidad")
-    pueblo = study_data.get("pueblo_indigena", "")
-    municipio = study_data.get("municipio", "")
-    dept = study_data.get("departamento", "")
+    texto_ia = ai_content.get("conclusiones")
+    if texto_ia:
+        for parrafo in texto_ia.split("\n\n"):
+            parrafo = parrafo.strip()
+            if parrafo:
+                _body(doc, parrafo)
+    else:
+        comunidad = study_data.get("nombre_comunidad", "la comunidad")
+        pueblo = study_data.get("pueblo_indigena", "")
+        municipio = study_data.get("municipio", "")
+        dept = study_data.get("departamento", "")
 
-    texto = (
-        f"El análisis etnológico realizado a {comunidad}"
-        + (f", perteneciente al pueblo {pueblo}," if pueblo else "")
-        + f" ubicada en el municipio de {municipio}, departamento de {dept}, "
-        f"permitió identificar y documentar los elementos constitutivos de su identidad "
-        f"cultural a través del análisis de {n_capas} capas temáticas con un total de "
-        f"{n_puntos} sitios georreferenciados. "
-        f"Los resultados del análisis espacial evidencian la cohesión territorial y la "
-        f"vigencia de las prácticas culturales ancestrales en el área de asentamiento. "
-        f"Con base en la evidencia documental y geográfica recopilada, se recomienda "
-        f"continuar con el proceso de reconocimiento ante el Ministerio del Interior."
-    )
-    _body(doc, texto)
+        texto = (
+            f"El análisis etnológico realizado a {comunidad}"
+            + (f", perteneciente al pueblo {pueblo}," if pueblo else "")
+            + f" ubicada en el municipio de {municipio}, departamento de {dept}, "
+            f"permitió identificar y documentar los elementos constitutivos de su identidad "
+            f"cultural a través del análisis de {n_capas} capas temáticas con un total de "
+            f"{n_puntos} sitios georreferenciados. "
+            f"Con base en la evidencia documental y geográfica recopilada, se recomienda "
+            f"continuar con el proceso de reconocimiento ante el Ministerio del Interior."
+        )
+        _body(doc, texto)
 
-    _heading2(doc, "Recomendaciones")
-    recomendaciones = [
-        "Verificar y actualizar los datos del autocenso con las autoridades tradicionales.",
-        "Complementar el registro fotográfico de los sitios de valor cultural identificados.",
-        "Coordinar con la Dirección de Asuntos Indígenas la agenda de visita oficial.",
-        "Mantener actualizados los registros SIG a medida que se identifiquen nuevos sitios.",
-    ]
-    for r in recomendaciones:
-        p = doc.add_paragraph(r, style="List Bullet")
-        p.runs[0].font.size = Pt(11)
-        p.runs[0].font.name = "Calibri"
+        _heading2(doc, "Recomendaciones")
+        recomendaciones = [
+            "Verificar y actualizar los datos del autocenso con las autoridades tradicionales.",
+            "Complementar el registro fotográfico de los sitios de valor cultural identificados.",
+            "Coordinar con la Dirección de Asuntos Indígenas la agenda de visita oficial.",
+            "Mantener actualizados los registros SIG a medida que se identifiquen nuevos sitios.",
+        ]
+        for r in recomendaciones:
+            p = doc.add_paragraph(r, style="List Bullet")
+            p.runs[0].font.size = Pt(11)
+            p.runs[0].font.name = "Calibri"
 
 
 # ── Constructor principal ──────────────────────────────────────────────────────
@@ -514,6 +555,7 @@ def build_report(
     gis_results: list[dict],
     mapa_general_png: bytes | None = None,
     mapas_por_capa_png: dict[str, bytes] | None = None,
+    ai_content: dict | None = None,
 ) -> bytes:
     """
     Construye el documento Word completo y retorna los bytes del .docx.
@@ -560,13 +602,17 @@ def build_report(
     end.set(qn("w:fldCharType"), "end")
     f_run._r.append(end)
 
+    ai = ai_content or {}
+
     # Secciones del informe
     _add_portada(doc, study_data)
     _add_marco_legal(doc)
     _page_break(doc)
     _add_info_general(doc, study_data, extracciones)
     _page_break(doc)
-    _add_caracterizacion(doc, extracciones)
+    _add_historia(doc, ai)
+    _page_break(doc)
+    _add_caracterizacion(doc, extracciones, ai)
     _page_break(doc)
 
     # Calcular métricas SIG para conclusiones
@@ -582,7 +628,7 @@ def build_report(
         study_data.get("buffer_metros", 50),
     )
     _page_break(doc)
-    _add_conclusiones(doc, study_data, n_capas, n_puntos)
+    _add_conclusiones(doc, study_data, n_capas, n_puntos, ai)
 
     buf = io.BytesIO()
     doc.save(buf)

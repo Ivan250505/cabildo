@@ -1,190 +1,316 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { getStudy, getCorpusFiles, processCorpus, runGisAnalysis, generateReport } from '../api/studies'
 
-type StepStatus = 'done' | 'active' | 'pending'
+type GenStep = 'idle' | 'extracting' | 'gis' | 'writing' | 'done' | 'error'
 
-const STEPS: { name: string; detail: string }[] = [
-  { name: 'Sincronización del corpus', detail: '62 archivos · 1.4 GB · 14 s' },
-  { name: 'Lectura de capas SIG', detail: '4 capas · 127 puntos · ETNIA1_CABILDO_MURUI.qgz' },
-  { name: 'Análisis geoespacial', detail: 'Buffers 50 m · 6 matrices de distancia · 6 superposiciones… 65%' },
-  { name: 'Extracción documental', detail: 'PDFs, DOCX, XLSX — spaCy NER español' },
-  { name: 'Módulos analíticos', detail: 'Discrepancias · DANE · Red de actores · Línea de tiempo' },
-  { name: 'Ensamblado del informe', detail: 'Plantilla institucional Word · Mapas + tablas + textos' },
-  { name: 'Exportación y registro', detail: 'Informe_MuruiMuina_v1.docx · Trazabilidad guardada' },
-]
-
-function getStepStatus(index: number, activeStep: number): StepStatus {
-  if (index < activeStep) return 'done'
-  if (index === activeStep) return 'active'
-  return 'pending'
+const TIPO_ICON: Record<string, string> = {
+  pdf: '📄', docx: '📝', xlsx: '📊', qgz: '🗺', gpkg: '🗄',
+  shp: '📐', jpg: '🖼', heic: '🖼', mp4: '🎬', mp3: '🎙', otro: '📎',
 }
 
 export default function GenerarPage() {
-  const [generating, setGenerating] = useState(false)
-  const [activeStep] = useState(2)
-  const [buffer, setBuffer] = useState('50')
-  const [layers, setLayers] = useState([true, true, true, true])
-  const [modules, setModules] = useState([true, true, true, true])
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
-  function handleGenerate() {
-    setGenerating(true)
+  const [step, setStep] = useState<GenStep>('idle')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [stepDetails, setStepDetails] = useState<Record<string, string>>({})
+
+  const { data: study, isLoading: studyLoading } = useQuery({
+    queryKey: ['study', id],
+    queryFn: () => getStudy(id!),
+    enabled: !!id,
+  })
+
+  const { data: corpus = [], isLoading: corpusLoading } = useQuery({
+    queryKey: ['corpus', id],
+    queryFn: () => getCorpusFiles(id!),
+    enabled: !!id,
+  })
+
+  if (studyLoading || corpusLoading) return <div className="loading-state">Cargando estudio…</div>
+
+  if (!id || !study) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">⚠</div>
+        <p>Estudio no encontrado.</p>
+        <Link to="/estudios" className="btn btn-outline" style={{ marginTop: 16 }}>← Volver</Link>
+      </div>
+    )
   }
 
-  function toggleLayer(i: number) {
-    setLayers((prev) => prev.map((v, idx) => (idx === i ? !v : v)))
+  // Corpus stats
+  const fase1 = corpus.filter((f: any) => f.fase === 'FASE1')
+  const fase2 = corpus.filter((f: any) => f.fase === 'FASE2')
+  const fase3 = corpus.filter((f: any) => f.fase === 'FASE3')
+  const tieneCorpus = corpus.length > 0
+  const tieneGpkg = corpus.some((f: any) => f.tipo_archivo === 'gpkg')
+  const tieneQgz = corpus.some((f: any) => f.tipo_archivo === 'qgz')
+  const tienePdf = corpus.some((f: any) => f.tipo_archivo === 'pdf')
+  const tieneDocx = corpus.some((f: any) => f.tipo_archivo === 'docx')
+
+  // Counts by tipo
+  const porTipo: Record<string, number> = {}
+  for (const f of corpus as any[]) {
+    porTipo[f.tipo_archivo] = (porTipo[f.tipo_archivo] ?? 0) + 1
   }
 
-  function toggleModule(i: number) {
-    setModules((prev) => prev.map((v, idx) => (idx === i ? !v : v)))
+  const canGenerate = tieneCorpus && step === 'idle' && !['procesando', 'sincronizando'].includes(study.estado)
+
+  async function handleGenerate() {
+    setStep('extracting')
+    setErrorMsg(null)
+    setStepDetails({})
+
+    try {
+      // Paso 1: Extracción documental (NLP + IA)
+      const extractResult = await processCorpus(id!, false)
+      setStepDetails(prev => ({
+        ...prev,
+        extracting: `${extractResult.archivos_procesados ?? 0} archivos · ${extractResult.entidades_extraidas ?? 0} datos extraídos`,
+      }))
+
+      // Paso 2: Análisis SIG (solo si hay GPKGs)
+      setStep('gis')
+      if (tieneGpkg) {
+        try {
+          const gisResult = await runGisAnalysis(id!)
+          setStepDetails(prev => ({
+            ...prev,
+            gis: `${gisResult.capas_analizadas?.length ?? 0} capas · ${gisResult.resultados_guardados ?? 0} resultados`,
+          }))
+        } catch {
+          setStepDetails(prev => ({ ...prev, gis: 'Omitido (sin capas SIG disponibles)' }))
+        }
+      } else {
+        setStepDetails(prev => ({ ...prev, gis: 'Omitido (sin archivos GPKG en corpus)' }))
+      }
+
+      // Paso 3: Generación del informe con IA
+      setStep('writing')
+      const report = await generateReport(id!)
+      setStepDetails(prev => ({
+        ...prev,
+        writing: `Informe v${report.version} generado`,
+      }))
+
+      setStep('done')
+      setTimeout(() => navigate(`/estudios/${id}/revision`), 1500)
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail ?? err?.message ?? 'Error desconocido'
+      setErrorMsg(msg)
+      setStep('error')
+    }
   }
 
-  const LAYER_NAMES = ['Prácticas Culturales (34 puntos)', 'Expresiones Simbólicas (28 puntos)', 'Entornos Territoriales (39 puntos)', 'Procesos Organizativos (26 puntos)']
-  const MODULE_NAMES = ['Validación de discrepancias poblacionales', 'Cruce con datos abiertos DANE', 'Red de actores clave', 'Línea de tiempo de eventos organizativos']
+  const steps = [
+    {
+      key: 'extracting',
+      label: 'Extracción documental',
+      desc: 'Lee PDFs y DOCX del corpus · NLP + IA extraen datos estructurados',
+      detail: stepDetails.extracting,
+    },
+    {
+      key: 'gis',
+      label: 'Análisis geoespacial',
+      desc: 'Buffers 50 m · matrices de distancia · superposiciones territoriales',
+      detail: stepDetails.gis,
+    },
+    {
+      key: 'writing',
+      label: 'Redacción con IA',
+      desc: 'La IA escribe las secciones narrativas del estudio etnológico',
+      detail: stepDetails.writing,
+    },
+  ]
+
+  const stepOrder = ['extracting', 'gis', 'writing'] as const
+  const currentIdx = stepOrder.indexOf(step as any)
+
+  function stepStatus(key: string) {
+    const idx = stepOrder.indexOf(key as any)
+    if (step === 'done') return 'done'
+    if (step === 'error' && idx === currentIdx) return 'error'
+    if (idx < currentIdx) return 'done'
+    if (idx === currentIdx) return 'active'
+    return 'pending'
+  }
 
   return (
     <>
       <div style={{ marginBottom: 20 }}>
         <div className="page-title">Generar informe</div>
-        <div className="page-sub">Cabildo Indígena Murui Muina · Configuración y validación del corpus</div>
+        <div className="page-sub">
+          {study.nombre_comunidad}
+          {study.pueblo_indigena && ` · Pueblo ${study.pueblo_indigena}`}
+          {' · '}{study.municipio}, {study.departamento}
+        </div>
       </div>
 
       <div className="two-col">
-        {/* LEFT — Parámetros */}
+        {/* LEFT — Validación del corpus */}
         <div>
           <div className="card">
             <div className="card-header">
-              <span className="section-title" style={{ margin: 0 }}>⚙ Parámetros de generación</span>
+              <span className="section-title" style={{ margin: 0 }}>
+                {tieneCorpus ? '✓ Corpus sincronizado' : '⚠ Sin corpus'}
+              </span>
             </div>
             <div className="card-body">
-              <div className="form-group">
-                <label className="form-label">Estudio</label>
-                <input className="form-input" value="Cabildo Indígena Murui Muina" readOnly />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Buffer de influencia (metros)</label>
-                <input className="form-input" type="number" value={buffer} onChange={(e) => setBuffer(e.target.value)} />
-                <div className="form-hint">Buffer estándar Ministerio del Interior: 50 m</div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Capas SIG a procesar</label>
-                <div className="checkbox-group">
-                  {LAYER_NAMES.map((name, i) => (
-                    <div className="checkbox-item" key={name}>
-                      <input type="checkbox" id={`layer-${i}`} checked={layers[i]} onChange={() => toggleLayer(i)} />
-                      <label htmlFor={`layer-${i}`}>{name}</label>
+              {!tieneCorpus ? (
+                <div className="alert alert-warning">
+                  No hay archivos sincronizados. Ve a la ficha del estudio y sincroniza el corpus desde Drive primero.
+                </div>
+              ) : (
+                <>
+                  {/* Conteo por fase */}
+                  {[{ label: 'FASE 1 — Pre-campo', files: fase1 }, { label: 'FASE 2 — Campo', files: fase2 }, { label: 'FASE 3 — Post-campo', files: fase3 }].map(({ label, files }) => (
+                    <div className={`corpus-item ${files.length > 0 ? 'ok' : 'warn'}`} key={label}>
+                      <div>
+                        <div className="corpus-label">📁 {label}</div>
+                        <div className="corpus-count">{files.length} archivos</div>
+                      </div>
+                      <span className={`badge ${files.length > 0 ? 'badge-success' : 'badge-warning'}`}>
+                        {files.length > 0 ? '✓' : '⚠ Vacío'}
+                      </span>
                     </div>
                   ))}
-                </div>
-              </div>
 
-              <div className="divider" />
+                  <div className="divider" />
 
-              <div className="form-group">
-                <label className="form-label">Módulos analíticos de valor agregado</label>
-                <div className="checkbox-group">
-                  {MODULE_NAMES.map((name, i) => (
-                    <div className="checkbox-item" key={name}>
-                      <input type="checkbox" id={`mod-${i}`} checked={modules[i]} onChange={() => toggleModule(i)} />
-                      <label htmlFor={`mod-${i}`}>{name}</label>
+                  {/* Tipos detectados */}
+                  <div className="corpus-label" style={{ marginBottom: 8 }}>Tipos detectados</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {Object.entries(porTipo).map(([tipo, count]) => (
+                      <span key={tipo} className="badge badge-neutral" style={{ fontSize: 11 }}>
+                        {TIPO_ICON[tipo] ?? '📎'} {tipo.toUpperCase()} ({count})
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="divider" />
+
+                  {/* Capacidades disponibles */}
+                  <div className={`corpus-item ${tienePdf || tieneDocx ? 'ok' : 'warn'}`}>
+                    <div>
+                      <div className="corpus-label">📄 Extracción documental</div>
+                      <div className="corpus-count">PDF y DOCX procesables con NLP + IA</div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="divider" />
-
-              <div className="form-group">
-                <label className="form-label">Formato de salida</label>
-                <select className="form-select">
-                  <option>Word (.docx) — Estándar institucional</option>
-                  <option>PDF (solo visualización)</option>
-                </select>
-              </div>
+                    <span className={`badge ${tienePdf || tieneDocx ? 'badge-success' : 'badge-warning'}`}>
+                      {tienePdf || tieneDocx ? '✓' : '⚠'}
+                    </span>
+                  </div>
+                  <div className={`corpus-item ${tieneGpkg || tieneQgz ? 'ok' : 'warn'}`}>
+                    <div>
+                      <div className="corpus-label">🗺 Análisis SIG</div>
+                      <div className="corpus-count">
+                        {tieneGpkg ? 'GeoPackage detectado' : tieneQgz ? 'Proyecto QGIS detectado' : 'Sin archivos geoespaciales — análisis SIG se omitirá'}
+                      </div>
+                    </div>
+                    <span className={`badge ${tieneGpkg || tieneQgz ? 'badge-success' : 'badge-warning'}`}>
+                      {tieneGpkg || tieneQgz ? '✓' : '⚠'}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
+            {tieneCorpus && (
+              <div className="card-footer">
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {corpus.length} archivos · Buffer SIG: {study.buffer_metros} m
+                </span>
+              </div>
+            )}
+          </div>
 
-            <div className="card-footer" style={{ textAlign: 'right' }}>
-              <button className="btn btn-outline btn-sm" style={{ marginRight: 8 }}>Vista previa del corpus</button>
-              <button className="btn btn-primary btn-lg" onClick={handleGenerate} disabled={generating}>
+          {step === 'idle' && (
+            <div style={{ marginTop: 16, textAlign: 'right' }}>
+              <Link to={`/estudios/${id}`} className="btn btn-outline" style={{ marginRight: 8 }}>
+                ← Volver al estudio
+              </Link>
+              <button
+                className="btn btn-primary btn-lg"
+                disabled={!canGenerate}
+                onClick={handleGenerate}
+                title={!tieneCorpus ? 'Sincroniza el corpus desde Drive primero' : ''}
+              >
                 ⚡ Generar informe completo
               </button>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* RIGHT — Validación / Progreso */}
-        <div>
-          {!generating ? (
-            <div className="card">
-              <div className="card-header"><span className="section-title" style={{ margin: 0 }}>✓ Validación del corpus</span></div>
-              <div className="card-body">
-                {[
-                  { label: '📁 FASE 1 — Pre-campo', count: '14 de 14 archivos encontrados', ok: true },
-                  { label: '📁 FASE 2 — Campo', count: '46 de 46 archivos encontrados', ok: true },
-                  { label: '📁 FASE 3 — Post-campo', count: '1 de 2 archivos (falta Acto administrativo firmado)', ok: false },
-                  { label: '🗺 Proyecto QGIS', count: 'ETNIA1_CABILDO_MURUI.qgz detectado', ok: true },
-                  { label: '🗄 GeoPackage', count: 'Archivo .gpkg detectado y legible', ok: true },
-                  { label: '✦ Capas SIG', count: '4 capas · 127 puntos georreferenciados', ok: true },
-                  { label: '📊 Autocenso', count: 'Autocenso_Murui Muina.xlsx · 98 personas, 27 familias', ok: true },
-                  { label: '⚠ Discrepancia poblacional', count: 'Autocenso vs. Censo Ministerio: diferencia de 3 familias', ok: false },
-                ].map((item) => (
-                  <div className={`corpus-item ${item.ok ? 'ok' : 'warn'}`} key={item.label}>
-                    <div>
-                      <div className="corpus-label">{item.label}</div>
-                      <div className="corpus-count">{item.count}</div>
+        {/* RIGHT — Progreso */}
+        <div className="card">
+          <div className="card-header">
+            <span className="section-title" style={{ margin: 0 }}>
+              {step === 'idle' ? 'Proceso de generación' : step === 'done' ? '✓ Informe generado' : step === 'error' ? '✗ Error en la generación' : '⚡ Generando informe…'}
+            </span>
+          </div>
+          <div className="card-body">
+            <div className="steps">
+              {steps.map((s) => {
+                const status = stepStatus(s.key)
+                return (
+                  <div className={`step ${status}`} key={s.key}>
+                    <div className="step-icon">
+                      {status === 'done' ? '✓' : status === 'active' ? '◷' : status === 'error' ? '✗' : steps.indexOf(s) + 1}
                     </div>
-                    <span className={`badge ${item.ok ? 'badge-success' : 'badge-warning'}`}>
-                      {item.ok ? '✓ Completo' : '⚠ Revisar'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="card">
-              <div className="card-header">
-                <span className="section-title" style={{ margin: 0 }}>⚡ Generando informe...</span>
-                <span className="text-sm text-muted">~8 min estimados</span>
-              </div>
-              <div className="card-body">
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                    <span>Progreso general</span><span>65%</span>
-                  </div>
-                  <div className="progress-bar-wrap" style={{ height: 8 }}>
-                    <div className="progress-bar" style={{ width: '65%' }} />
-                  </div>
-                </div>
-
-                <div className="steps">
-                  {STEPS.map((step, i) => {
-                    const status = getStepStatus(i, activeStep)
-                    return (
-                      <div className={`step ${status}`} key={step.name}>
-                        <div className="step-icon">
-                          {status === 'done' ? '✓' : status === 'active' ? '◷' : i + 1}
-                        </div>
-                        <div className="step-content">
-                          <div className="step-name">{step.name}</div>
-                          <div className="step-detail">{step.detail}</div>
-                        </div>
+                    <div className="step-content">
+                      <div className="step-name">{s.label}</div>
+                      <div className="step-detail">
+                        {s.detail ?? s.desc}
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
 
-                <div className="divider" />
-                <button
-                  className="btn btn-success btn-full"
-                  onClick={() => navigate('/estudios/1/revision')}
-                >
-                  ✓ Ver informe generado
+            {step === 'error' && errorMsg && (
+              <div className="alert alert-danger" style={{ marginTop: 16 }}>
+                <strong>Error:</strong> {errorMsg}
+                <br />
+                <button className="btn btn-outline btn-sm" style={{ marginTop: 8 }} onClick={() => setStep('idle')}>
+                  Reintentar
                 </button>
               </div>
-            </div>
-          )}
+            )}
+
+            {step === 'done' && (
+              <div className="alert alert-success" style={{ marginTop: 16 }}>
+                Informe generado. Redirigiendo a la revisión…
+              </div>
+            )}
+
+            {step !== 'idle' && step !== 'error' && step !== 'done' && (
+              <div style={{ marginTop: 16 }}>
+                <div className="progress-bar-wrap" style={{ height: 6 }}>
+                  <div
+                    className="progress-bar"
+                    style={{
+                      width: step === 'extracting' ? '33%' : step === 'gis' ? '66%' : '90%',
+                      transition: 'width 0.5s ease',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {step === 'idle' && (
+              <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8 }}>
+                <p>El proceso corre los tres pasos en secuencia. El tiempo depende del tamaño del corpus y del proveedor de IA configurado.</p>
+                {!tieneCorpus && (
+                  <div className="alert alert-warning" style={{ marginTop: 8 }}>
+                    Debes sincronizar el corpus desde Drive antes de generar el informe.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

@@ -51,6 +51,18 @@ export async function transitionStudy(studyId: string, estado: Study['estado']):
   return data
 }
 
+export async function processCorpus(studyId: string, reprocess = false) {
+  const { data } = await client.post(`studies/${studyId}/documents/process`, null, {
+    params: { reprocess },
+  })
+  return data
+}
+
+export async function runGisAnalysis(studyId: string) {
+  const { data } = await client.post(`studies/${studyId}/gis/analyze`)
+  return data
+}
+
 export async function getReports(studyId: string): Promise<Report[]> {
   const { data } = await client.get<Report[]>(`studies/${studyId}/reports`)
   return data
