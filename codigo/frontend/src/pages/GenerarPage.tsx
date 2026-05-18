@@ -22,6 +22,7 @@ export default function GenerarPage() {
   const [stepDetails, setStepDetails] = useState<Record<string, string>>({})
   const [elapsed, setElapsed] = useState(0)
   const genStartRef = useRef<number | null>(null)
+  const recoveredRef = useRef(false)
 
   const { data: study, isLoading: studyLoading } = useQuery({
     queryKey: ['study', id],
@@ -51,6 +52,84 @@ export default function GenerarPage() {
     }, 1000)
     return () => clearInterval(interval)
   }, [step])
+
+  // Recuperación automática si la página se recargó durante la generación
+  useEffect(() => {
+    if (!study || !id || recoveredRef.current) return
+
+    async function recover() {
+      recoveredRef.current = true
+
+      // Caso 1: el informe ya está listo → redirigir directo
+      try {
+        const reports = await getReports(id!)
+        const listo = reports.find(r => r.estado === 'listo_revision' || r.estado === 'aprobado')
+        if (listo) {
+          toast.success('Informe ya disponible', 'Redirigiendo a la revisión…')
+          setTimeout(() => navigate(`/estudios/${id}/revision`), 1200)
+          return
+        }
+
+        // Caso 2: hay un informe generándose → retomar polling
+        const generando = reports.find(r => r.estado === 'generando')
+        if (generando) {
+          setStep('writing')
+          setStepDetails({ extracting: 'Completado', gis: 'Completado', writing: 'Retomando…' })
+          toast.info('Generación en curso', 'La página se recargó — retomando seguimiento del informe.')
+          const deadline = Date.now() + 1_200_000
+          while (Date.now() < deadline) {
+            await new Promise(r => setTimeout(r, 4000))
+            const reps = await getReports(id!)
+            const r = reps.find(rep => rep.id === generando.id)
+            if (!r) continue
+            if (r.estado === 'listo_revision' || r.estado === 'aprobado') {
+              setStepDetails(prev => ({ ...prev, writing: `Informe v${r.version} generado` }))
+              setStep('done')
+              toast.success('¡Informe generado!', 'Redirigiendo a la vista de revisión…')
+              setTimeout(() => navigate(`/estudios/${id}/revision`), 1800)
+              return
+            }
+            if (r.estado === 'error') {
+              setErrorMsg(r.error_msg ?? 'Error generando informe')
+              setStep('error')
+              return
+            }
+          }
+          setErrorMsg('Tiempo de espera agotado. El proceso puede seguir en el servidor.')
+          setStep('error')
+          return
+        }
+      } catch { /* Si falla la consulta, no hacemos nada */ }
+
+      // Caso 3: el estudio está procesando corpus → retomar ese paso
+      if (study!.estado === 'procesando' || study!.estado === 'sincronizando') {
+        setStep('extracting')
+        setStepDetails({ extracting: 'Retomando extracción del corpus…' })
+        toast.info('Extracción en curso', 'La página se recargó — retomando seguimiento.')
+        const deadline = Date.now() + 1_200_000
+        while (Date.now() < deadline) {
+          await new Promise(r => setTimeout(r, 4000))
+          try {
+            const s = await getStudy(id!)
+            if (s.estado === 'error') {
+              setErrorMsg(s.error_msg ?? 'Error')
+              setStep('error')
+              return
+            }
+            if (!['procesando', 'sincronizando'].includes(s.estado)) {
+              setStepDetails(prev => ({ ...prev, extracting: 'Corpus procesado' }))
+              setStep('idle')
+              return
+            }
+          } catch { break }
+        }
+      }
+
+      recoveredRef.current = false
+    }
+
+    recover()
+  }, [study?.estado, id])
 
   if (studyLoading || corpusLoading) return <div className="loading-state">Cargando estudio…</div>
 
