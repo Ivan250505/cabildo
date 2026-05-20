@@ -124,12 +124,32 @@ async def process_drive_file(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Descarga UN archivo de Drive, extrae texto, genera resumen, guarda en BD y borra el archivo.
-    Llamar de uno en uno desde el frontend para control de progreso sin timeout.
+    [LEGACY] Descarga UN archivo de Drive, extrae texto, genera resumen, guarda en BD y borra.
+    Reemplazado por download-file/{study_id} + pipeline v2. Se mantiene por compatibilidad.
     """
     result = await service.process_single_file(
         db, current_user, study_id,
         body.drive_file_id, body.file_name, body.mime_type, body.fase,
+    )
+    await db.commit()
+    return result
+
+
+@router.post("/download-file/{study_id}")
+async def download_drive_file(
+    study_id: UUID,
+    body: ProcessFileRequest,
+    current_user: User = Depends(require_tecnico),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Solo descarga UN archivo de Drive al storage permanente. No corre extracción IA.
+    El archivo queda en estado='descargado' listo para que el pipeline v2 lo procese.
+    """
+    result = await service.download_only_file(
+        db, current_user, study_id,
+        body.drive_file_id, body.file_name, body.mime_type, body.fase,
+        rol_manual=body.rol_manual,
     )
     await db.commit()
     return result

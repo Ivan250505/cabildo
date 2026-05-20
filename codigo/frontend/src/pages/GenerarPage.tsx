@@ -101,18 +101,18 @@ export default function GenerarPage() {
         }
       } catch { /* Si falla la consulta, no hacemos nada */ }
 
-      // Caso 3: el estudio está procesando corpus → retomar ese paso
+      // Caso 3: el estudio está procesando corpus → retomar o detectar atasco
       if (study!.estado === 'procesando' || study!.estado === 'sincronizando') {
         setStep('extracting')
-        setStepDetails({ extracting: 'Retomando extracción del corpus…' })
-        toast.info('Extracción en curso', 'La página se recargó — retomando seguimiento.')
-        const deadline = Date.now() + 1_200_000
+        setStepDetails({})
+        toast.info('Extracción en curso', 'Verificando estado del servidor…')
+        const deadline = Date.now() + 300_000  // 5 min máximo esperando
         while (Date.now() < deadline) {
           await new Promise(r => setTimeout(r, 4000))
           try {
             const s = await getStudy(id!)
             if (s.estado === 'error') {
-              setErrorMsg(s.error_msg ?? 'Error')
+              setErrorMsg(s.error_msg ?? 'Error procesando corpus')
               setStep('error')
               return
             }
@@ -123,6 +123,8 @@ export default function GenerarPage() {
             }
           } catch { break }
         }
+        setErrorMsg('El proceso parece atascado. Haz clic en Reintentar — si el problema persiste, re-sincroniza el corpus desde Drive.')
+        setStep('error')
       }
 
       recoveredRef.current = false
@@ -159,7 +161,7 @@ export default function GenerarPage() {
     porTipo[f.tipo_archivo] = (porTipo[f.tipo_archivo] ?? 0) + 1
   }
 
-  const canGenerate = tieneCorpus && step === 'idle' && !['procesando', 'sincronizando'].includes(study.estado)
+  const canGenerate = tieneCorpus && step === 'idle'
 
   async function pollStudy(
     until: (s: StudyDetail) => boolean,
@@ -433,7 +435,8 @@ export default function GenerarPage() {
               // Total estimado: 12 min (720s). La barra nunca pasa de 95%.
               const STEP_START: Record<string, number> = { extracting: 0, gis: 30, writing: 60 }
               const STEP_END:   Record<string, number> = { extracting: 28, gis: 58, writing: 93 }
-              const STEP_DUR  = 240 // segundos estimados por paso
+              // Estimado dinámico: mín 4 min, +5s por archivo, máx 15 min por paso
+              const STEP_DUR  = Math.min(Math.max(240, corpus.length * 5), 900)
               const base  = STEP_START[step] ?? 0
               const top   = STEP_END[step]   ?? 93
               const ratio = Math.min(elapsed / STEP_DUR, 1)
@@ -470,7 +473,13 @@ export default function GenerarPage() {
                     <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{Math.round(pct)}%</span>
                   </div>
                   <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                    El proceso puede tomar entre 5 y 20 minutos según el tamaño del corpus
+                    {elapsed < 1200
+                      ? 'El proceso puede tomar entre 5 y 20 minutos según el tamaño del corpus'
+                      : 'Corpus grande — el proceso continúa en el servidor, aguarda unos minutos más'}
+                    {' · '}
+                    <Link to={`/estudios/${id}/debug`} style={{ color: 'var(--primary)', fontSize: 11 }}>
+                      ver extracción en tiempo real →
+                    </Link>
                   </div>
                 </div>
               )

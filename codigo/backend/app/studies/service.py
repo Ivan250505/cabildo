@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from fastapi import HTTPException, status
 
 from app.auth.models import User
-from app.studies.models import Study, StudyCorpus, CorpusExtraction, GISResult, Report
+from app.studies.models import Study, StudyCorpus, CorpusExtraction, GISResult, Report, StudyLocation
 from app.studies.schemas import StudyCreate, StudyUpdate, CorpusFileCreate
 
 # Valid state machine transitions
@@ -87,11 +87,6 @@ async def update_study(db: AsyncSession, study_id: UUID, data: StudyUpdate) -> S
 
 async def delete_study(db: AsyncSession, study_id: UUID) -> None:
     study = await get_study_or_404(db, study_id)
-    if study.estado not in ("borrador", "error"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Solo se pueden eliminar estudios en estado 'borrador' o 'error'",
-        )
     await db.delete(study)
     await db.flush()
 
@@ -157,6 +152,18 @@ async def list_extractions(db: AsyncSession, study_id: UUID) -> list[CorpusExtra
         select(CorpusExtraction)
         .where(CorpusExtraction.study_id == study_id)
         .order_by(CorpusExtraction.tipo_dato)
+    )
+    return result.scalars().all()
+
+
+# ── Locations ────────────────────────────────────────────────────────────────
+
+async def list_locations(db: AsyncSession, study_id: UUID) -> list[StudyLocation]:
+    await get_study_or_404(db, study_id)
+    result = await db.execute(
+        select(StudyLocation)
+        .where(StudyLocation.study_id == study_id)
+        .order_by(StudyLocation.tipo, StudyLocation.nombre)
     )
     return result.scalars().all()
 

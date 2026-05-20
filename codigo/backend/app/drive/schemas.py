@@ -67,6 +67,7 @@ class ProcessFileRequest(BaseModel):
     file_name: str
     mime_type: str
     fase: str
+    rol_manual: str | None = None  # Sprint UX — categoría asignada por el usuario al descargar
 
 
 class ProcessFileResponse(BaseModel):

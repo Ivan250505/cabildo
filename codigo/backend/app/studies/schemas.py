@@ -3,7 +3,7 @@ from uuid import UUID
 from datetime import datetime
 from typing import Literal
 
-from app.studies.models import STUDY_STATES, CORPUS_FILE_TYPES, CORPUS_ROLES
+from app.studies.models import STUDY_STATES, CORPUS_FILE_TYPES, CORPUS_ROLES, LOCATION_TIPOS
 
 
 # ── Study ─────────────────────────────────────────────────────────────────────
@@ -24,6 +24,7 @@ class StudyCreate(BaseModel):
     url_drive_fase3: str | None = None
     buffer_metros: int = Field(50, ge=10, le=500)
     responsable_id: UUID | None = None
+    modo_creacion: Literal["drive_existente", "encuestas_nuevas"] = "drive_existente"
 
 
 class StudyUpdate(BaseModel):
@@ -76,6 +77,7 @@ class StudyResponse(BaseModel):
     lat: float | None
     lng: float | None
     estado: str
+    modo_creacion: str
     error_msg: str | None
     url_drive_fase1: str | None
     url_drive_fase2: str | None
@@ -116,6 +118,9 @@ class CorpusFileResponse(BaseModel):
     drive_file_id: str
     tipo_archivo: str
     rol_en_corpus: str | None
+    clasificacion_fuente: str | None
+    clasificacion_confianza: float | None
+    notas_clasificacion: str | None
     tamanio_bytes: int | None
     ruta_local: str | None
     estado: str
@@ -126,6 +131,86 @@ class CorpusFileResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ── Clasificación de archivos ─────────────────────────────────────────────────
+
+class CorpusClasificarRequest(BaseModel):
+    """Parámetros para POST /api/studies/{id}/corpus/clasificar."""
+    ignore_existing: bool = False     # True = reclasificar también los ya clasificados (no toca 'manual')
+    use_ai_fallback: bool = True      # False = solo heurística, sin tokens IA
+
+
+class CorpusRolOverrideRequest(BaseModel):
+    """Body de PATCH /api/studies/{id}/corpus/{file_id}/rol."""
+    rol: Literal[CORPUS_ROLES]
+    notas: str | None = None
+
+
+class CorpusClasificacionItem(BaseModel):
+    file_id: str
+    nombre: str
+    rol: str | None
+    fuente: str
+    confianza: float
+    omitido: bool = False
+    notas: str | None = None
+
+
+class CorpusClasificarResponse(BaseModel):
+    study_id: str
+    total_archivos: int
+    clasificados: int
+    omitidos: int
+    fallback_otro: int
+    por_fuente: dict[str, int]
+    archivos: list[CorpusClasificacionItem]
+
+
+# ── Datos estructurados por archivo (Sprint Drive B) ──────────────────────────
+
+class CorpusDatosResponse(BaseModel):
+    file_id: str
+    study_id: str
+    nombre_archivo: str
+    rol_en_corpus: str | None
+    esquema_version: str | None
+    extraido_con_modelo: str | None
+    extraido_en: str | None
+    hash_sha256: str | None
+    tiene_datos: bool
+    datos_estructurados: dict | None
+    template_si_vacio: dict | None
+
+
+class CorpusDatosUpdateRequest(BaseModel):
+    datos: dict
+
+
+class CorpusDatosUpdateResponse(BaseModel):
+    file_id: str
+    datos_estructurados: dict
+    warnings: list[str]
+    esquema_version: str | None
+
+
+# ── Consolidado del estudio (Sprint Drive E) ──────────────────────────────────
+
+class ConsolidadoOverrideItem(BaseModel):
+    path: str = Field(..., description="Dot-notation: 'poblacion.personas' o 'identificacion.nit'")
+    valor: object
+    nota: str | None = None
+
+
+class ConsolidadoOverrideRequest(BaseModel):
+    overrides: list[ConsolidadoOverrideItem]
+    merge: bool = Field(True, description="Si false, reemplaza todos los overrides existentes")
+
+
+class ConsolidadoOverrideResponse(BaseModel):
+    study_id: str
+    overrides: dict
+    total: int
+
+
 # ── CorpusExtraction ───────────────────────────────────────────────────────────
 
 class ExtractionResponse(BaseModel):
@@ -133,6 +218,23 @@ class ExtractionResponse(BaseModel):
     study_id: UUID
     tipo_dato: str
     valor: str | None
+    fuente_archivo: str | None
+    confianza: float | None
+    extraido_en: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── StudyLocation ─────────────────────────────────────────────────────────────
+
+class StudyLocationOut(BaseModel):
+    id: UUID
+    study_id: UUID
+    nombre: str
+    tipo: str
+    lat: float
+    lng: float
+    descripcion: str | None
     fuente_archivo: str | None
     confianza: float | None
     extraido_en: datetime

@@ -31,6 +31,7 @@ export interface ProcessFileRequest {
   file_name: string
   mime_type: string
   fase: string
+  rol_manual?: string | null
 }
 
 export interface ProcessFileResult {
@@ -64,5 +65,20 @@ export async function listDriveFolder(url: string): Promise<FolderFilesResponse>
 
 export async function processDriveFile(studyId: string, body: ProcessFileRequest): Promise<ProcessFileResult> {
   const { data } = await client.post<ProcessFileResult>(`drive/process-file/${studyId}`, body)
+  return data
+}
+
+export interface DownloadFileResult {
+  drive_file_id: string
+  nombre_archivo: string
+  tipo: string
+  tamanio_bytes: number | null
+  ruta_local: string
+  estado: string
+  rol_inferido: string | null
+}
+
+export async function downloadDriveFile(studyId: string, body: ProcessFileRequest): Promise<DownloadFileResult> {
+  const { data } = await client.post<DownloadFileResult>(`drive/download-file/${studyId}`, body)
   return data
 }

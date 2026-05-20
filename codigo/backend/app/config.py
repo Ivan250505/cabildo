@@ -55,7 +55,11 @@ class Settings(BaseSettings):
     # IA para extracción (claude | openai | gemini | none)
     AI_PROVIDER: str = "none"
     AI_API_KEY: str = ""
-    AI_MODEL: str = ""
+    AI_MODEL: str = "gemini-2.0-flash-lite"
+
+    # Sprint Drive C — flags de pipeline
+    EXTRACTION_USE_SPACY: bool = False     # Pipeline viejo: si true, sigue corriendo spaCy NER
+    EXTRACTION_USE_LEGACY_SUMMARY: bool = False  # Pipeline viejo: resumen IA por archivo
 
     # Entorno
     ENVIRONMENT: str = "development"

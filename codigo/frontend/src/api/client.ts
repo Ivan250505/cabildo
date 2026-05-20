@@ -15,8 +15,12 @@ client.interceptors.response.use(
   (res) => res,
   (err: unknown) => {
     if (axios.isAxiosError(err) && err.response?.status === 401) {
-      useAuthStore.getState().logout()
-      window.location.href = '/login'
+      const url = err.config?.url ?? ''
+      const isLoginRequest = url.includes('auth/login')
+      if (!isLoginRequest) {
+        useAuthStore.getState().logout()
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   }

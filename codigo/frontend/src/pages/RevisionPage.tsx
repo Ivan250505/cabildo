@@ -8,26 +8,28 @@ import type { Report } from '../types'
 
 const REAL_SECTIONS = [
   { id: 'portada', label: 'Portada institucional' },
-  { id: 's1', label: 'I. Información General' },
+  { id: 's1', label: 'I. Presentación' },
   { id: 's2', label: 'II. Marco Legal y Normativo' },
-  { id: 's3', label: 'III. Historia y Contexto' },
-  { id: 's4', label: 'IV. Caracterización Etnológica' },
-  { id: 's4a', label: '4.1 Prácticas Culturales', sub: true },
-  { id: 's4b', label: '4.2 Expresiones Simbólicas', sub: true },
-  { id: 's4c', label: '4.3 Entornos Territoriales', sub: true },
-  { id: 's4d', label: '4.4 Procesos Organizativos', sub: true },
-  { id: 's5', label: 'V. Análisis Georreferenciado' },
-  { id: 's5a', label: '5.1 Distribución territorial', sub: true },
-  { id: 's5b', label: '5.2 Matrices de distancia', sub: true },
-  { id: 's5c', label: '5.3 Solapamientos espaciales', sub: true },
-  { id: 's6', label: 'VI. Conclusiones y Recomendaciones' },
+  { id: 's3', label: 'III. Información General' },
+  { id: 's4', label: 'IV. Reseña Histórica' },
+  { id: 's5', label: 'V. Conciencia de Identidad' },
+  { id: 's6', label: 'VI. Caracterización Etnológica' },
+  { id: 's6a', label: '6.1 Intrarelacional', sub: true },
+  { id: 's6b', label: '6.2 Interrelacional', sub: true },
+  { id: 's7', label: 'VII. Prospectiva' },
+  { id: 's8', label: 'VIII. Análisis Georreferenciado' },
+  { id: 's8a', label: '8.1 Distribución territorial', sub: true },
+  { id: 's8b', label: '8.2 Matrices de distancia', sub: true },
+  { id: 's8c', label: '8.3 Solapamientos espaciales', sub: true },
+  { id: 's9', label: 'IX. Conclusiones y Recomendaciones' },
 ]
 
-// Agrupa las extracciones poblacionales por archivo fuente y arma las filas de la tabla
+// Agrupa las extracciones poblacionales por archivo fuente
+// Acepta tipos IA (familias_count, personas_count) y regex (poblacion)
 function buildPoblacionRows(extractions: Extraction[]) {
   const byFile: Record<string, Record<string, string>> = {}
   for (const e of extractions) {
-    if (!['familias_count', 'personas_count', 'fecha_censo', 'fuente_censo'].includes(e.tipo_dato)) continue
+    if (!['familias_count', 'personas_count', 'fecha_censo', 'fuente_censo', 'poblacion'].includes(e.tipo_dato)) continue
     const file = e.fuente_archivo ?? 'Desconocido'
     if (!byFile[file]) byFile[file] = {}
     if (!byFile[file][e.tipo_dato]) byFile[file][e.tipo_dato] = e.valor ?? ''
@@ -35,7 +37,8 @@ function buildPoblacionRows(extractions: Extraction[]) {
   return Object.entries(byFile).map(([file, vals]) => ({
     fuente: vals['fuente_censo'] ?? file.replace(/\.[^.]+$/, ''),
     familias: vals['familias_count'] ?? '—',
-    personas: vals['personas_count'] ?? '—',
+    // poblacion es el tipo que genera el extractor regex cuando no hay IA
+    personas: vals['personas_count'] ?? vals['poblacion'] ?? '—',
     fecha: vals['fecha_censo'] ?? '—',
   }))
 }

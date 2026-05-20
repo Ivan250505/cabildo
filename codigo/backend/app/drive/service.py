@@ -34,8 +34,15 @@ from app.config import get_settings
 from app.drive.crypto import decrypt_token, encrypt_token
 from app.drive.schemas import DriveFileInfo, FolderListResponse, SyncResult, StudySyncResponse, FolderFilesResponse, FolderFileItem
 from app.studies.models import CorpusExtraction, Study, StudyCorpus
+from app.documents.ai_extractor import _SKIP_SUMMARY_THRESHOLD, get_ai_extractor
 
 settings = get_settings()
+
+_ai_extractor = get_ai_extractor(
+    provider=settings.AI_PROVIDER,
+    api_key=settings.AI_API_KEY,
+    model=settings.AI_MODEL,
+)
 
 SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
@@ -80,6 +87,58 @@ def _get_tipo(mime: str, filename: str) -> str:
         return tipo
     ext = Path(filename).suffix.lower()
     return _EXT_TO_TIPO.get(ext, "otro")
+
+
+# Patrones de nombre → rol_en_corpus. Más específico primero (acta_eleccion antes que acta).
+_ROL_PATTERNS: list[tuple[str, str]] = [
+    ("autocenso depurado", "autocenso_depurado"),
+    ("autoncenso depurado", "autocenso_depurado"),
+    ("autocenso", "autocenso"),
+    ("autoncenso", "autocenso"),
+    ("censo comunidad", "censo_comunidad"),
+    ("censo", "censo_comunidad"),
+    ("acta de eleccion", "acta_eleccion"),
+    ("acta de elección", "acta_eleccion"),
+    ("acta eleccion", "acta_eleccion"),
+    ("acta de posesion", "acta_posesion"),
+    ("acta de posesión", "acta_posesion"),
+    ("acta posesion", "acta_posesion"),
+    ("acta de inicio", "acta_inicio"),
+    ("ficha de pre-campo", "ficha_precampo"),
+    ("ficha pre-campo", "ficha_precampo"),
+    ("ficha precampo", "ficha_precampo"),
+    ("ficha de comision", "ficha_comision"),
+    ("ficha de comisión", "ficha_comision"),
+    ("solicitud formal", "solicitud_formal"),
+    ("solicitud", "solicitud_formal"),
+    ("reglamento interno", "reglamento"),
+    ("reglamento", "reglamento"),
+    ("reseña histórica", "resena_historica"),
+    ("resena historica", "resena_historica"),
+    ("rut comunidad", "rut_comunidad"),
+    ("rut", "rut_comunidad"),
+    ("mapa", "mapa_territorial"),
+    ("base de datos dane", "base_datos_dane"),
+    ("bd-caqueta", "base_datos_dane"),
+    ("diario de campo", "diario_campo"),
+    ("cronograma", "cronograma"),
+    ("apuntes reuniones", "apuntes_reuniones"),
+    ("arbol de riesgo", "arbol_riesgo"),
+    ("árbol de riesgo", "arbol_riesgo"),
+    ("cartografia social", "cartografia_social"),
+    ("cartografía social", "cartografia_social"),
+    ("registro de asistencia", "registro_asistencia"),
+    ("lista de asistencia", "registro_asistencia"),
+]
+
+
+def _infer_rol(filename: str, subfolder: str | None = None) -> str | None:
+    """Infer rol_en_corpus from filename / subfolder name (lowercase match)."""
+    haystack = f"{subfolder or ''} {filename}".lower()
+    for needle, rol in _ROL_PATTERNS:
+        if needle in haystack:
+            return rol
+    return None
 
 
 # MIME de exportación para Google Docs nativos
@@ -472,8 +531,133 @@ def list_folder_by_url(user: User, url: str) -> FolderFilesResponse:
     return FolderFilesResponse(url=url, total=len(items), items=items)
 
 
-_PROCESABLE_EXTS = {".pdf", ".docx", ".doc"}
+_PROCESABLE_EXTS = {
+    ".pdf", ".docx", ".doc",
+    ".xlsx", ".xls",
+    ".md", ".markdown", ".txt",
+    ".jpg", ".jpeg", ".png", ".heic", ".webp",
+}
 _MAX_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+# ── Sprint Drive D/E — descarga sin procesar ─────────────────────────────────
+# Esta función reemplaza a process_single_file en el nuevo flujo: solo descarga
+# el archivo al storage permanente y registra StudyCorpus con estado="descargado".
+# La clasificación y extracción IA quedan a cargo del pipeline v2.
+
+async def download_only_file(
+    db: AsyncSession,
+    user: User,
+    study_id: UUID,
+    drive_file_id: str,
+    file_name: str,
+    mime_type: str,
+    fase: str,
+    rol_manual: str | None = None,
+) -> dict:
+    """
+    Descarga UN archivo de Drive al storage permanente. NO ejecuta extracción IA.
+    Crea o actualiza el StudyCorpus con estado='descargado' y ruta_local poblada.
+    """
+    drive_svc = build_drive_client(user)
+
+    # Ajustar nombre para documentos de Google exportados
+    name = file_name
+    if mime_type in _EXPORT_EXT and not name.endswith(_EXPORT_EXT[mime_type]):
+        name += _EXPORT_EXT[mime_type]
+
+    tipo = _get_tipo(mime_type, name)
+    rol_inferido = _infer_rol(name)
+
+    # Carpeta permanente del estudio
+    storage_dir = Path(settings.FILES_BASE_PATH) / str(study_id) / "corpus"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+
+    # Para evitar choques si dos archivos del mismo nombre vienen de carpetas distintas,
+    # prefijar con drive_file_id corto cuando ya existe uno con ese nombre.
+    safe_name = name.replace("/", "_").replace("\\", "_")
+    dest = storage_dir / safe_name
+    if dest.exists():
+        dest = storage_dir / f"{drive_file_id[:8]}_{safe_name}"
+
+    # Verificar si ya existe en el corpus
+    existing_q = await db.execute(
+        select(StudyCorpus).where(
+            StudyCorpus.study_id == study_id,
+            StudyCorpus.drive_file_id == drive_file_id,
+        )
+    )
+    existing = existing_q.scalar_one_or_none()
+
+    size: int | None = None
+    try:
+        _download_file(drive_svc, drive_file_id, mime_type, dest)
+        size = dest.stat().st_size
+    except Exception as exc:
+        now_err = datetime.now(timezone.utc)
+        if existing:
+            existing.estado = "error"
+            existing.error_msg = str(exc)[:300]
+            existing.sync_at = now_err
+        else:
+            db.add(StudyCorpus(
+                study_id=study_id, fase=fase, nombre_archivo=name,
+                drive_file_id=drive_file_id, tipo_archivo=tipo,
+                estado="error", error_msg=str(exc)[:300], sync_at=now_err,
+            ))
+        await db.flush()
+        raise HTTPException(status_code=502, detail=f"Error descargando '{name}': {exc}")
+
+    now = datetime.now(timezone.utc)
+    # Si el usuario asignó un rol manual desde el modal, gana sobre la inferencia heurística
+    from app.studies.models import CORPUS_ROLES as _ROLES_VALIDOS
+    rol_final = rol_manual if (rol_manual and rol_manual in _ROLES_VALIDOS) else rol_inferido
+    es_manual = bool(rol_manual and rol_manual in _ROLES_VALIDOS)
+
+    if existing:
+        existing.nombre_archivo = name
+        existing.tipo_archivo = tipo
+        existing.tamanio_bytes = size
+        existing.ruta_local = str(dest)
+        existing.estado = "descargado"
+        existing.error_msg = None
+        existing.sync_at = now
+        if es_manual:
+            existing.rol_en_corpus = rol_final
+            existing.clasificacion_fuente = "manual"
+            existing.clasificacion_confianza = 1.000
+            existing.notas_clasificacion = "Asignado por el usuario al descargar de Drive"
+        elif not existing.rol_en_corpus and rol_inferido:
+            existing.rol_en_corpus = rol_inferido
+    else:
+        db.add(StudyCorpus(
+            study_id=study_id, fase=fase, nombre_archivo=name,
+            drive_file_id=drive_file_id, tipo_archivo=tipo,
+            rol_en_corpus=rol_final,
+            clasificacion_fuente=("manual" if es_manual else None),
+            clasificacion_confianza=(1.000 if es_manual else None),
+            notas_clasificacion=("Asignado por el usuario al descargar de Drive" if es_manual else None),
+            tamanio_bytes=size, ruta_local=str(dest),
+            estado="descargado",
+            sync_at=now,
+        ))
+
+    await db.flush()
+
+    # Estudio en borrador → corpus_ok (al menos hay un archivo)
+    study = await db.get(Study, study_id)
+    if study and study.estado in ("borrador", "sincronizando"):
+        study.estado = "corpus_ok"
+
+    return {
+        "drive_file_id": drive_file_id,
+        "nombre_archivo": name,
+        "tipo": tipo,
+        "tamanio_bytes": size,
+        "ruta_local": str(dest),
+        "estado": "descargado",
+        "rol_inferido": rol_inferido,
+    }
 
 
 async def process_single_file(
@@ -501,6 +685,7 @@ async def process_single_file(
         name += _EXPORT_EXT[mime_type]
 
     tipo = _get_tipo(mime_type, name)
+    rol_inferido = _infer_rol(name)
 
     # Verificar si ya existe en el corpus
     existing_q = await db.execute(
@@ -511,9 +696,22 @@ async def process_single_file(
     )
     existing = existing_q.scalar_one_or_none()
 
+    # Si ya fue procesado antes, borrar extracciones viejas para no acumular duplicados/basura
+    if existing:
+        from sqlalchemy import delete as sa_delete
+        await db.execute(
+            sa_delete(CorpusExtraction).where(
+                CorpusExtraction.study_id == study_id,
+                CorpusExtraction.fuente_archivo == name,
+            )
+        )
+
     size = None
     resumen = None
     n_entidades = 0
+    texto_chars = 0
+    fuente_extraccion: str | None = None
+    error_detalle: str | None = None
 
     with tempfile.TemporaryDirectory() as tmpdir:
         dest = Path(tmpdir) / name
@@ -538,20 +736,62 @@ async def process_single_file(
             await db.flush()
             raise HTTPException(status_code=502, detail=f"Error descargando '{name}': {exc}")
 
-        # Extracción de texto (solo PDF/DOCX y < 50 MB)
+        # Extracción de texto en cascada (local → Tesseract → Vision)
         if dest.suffix.lower() in _PROCESABLE_EXTS and size < _MAX_SIZE_BYTES:
             try:
-                doc_result = process_document(dest, source_name=name, model_name=settings.SPACY_MODEL)
+                gemini_key = settings.AI_API_KEY if settings.AI_PROVIDER.lower() == "gemini" else None
+                doc_result = process_document(
+                    dest,
+                    source_name=name,
+                    model_name=settings.SPACY_MODEL,
+                    gemini_api_key=gemini_key,
+                    gemini_model=settings.AI_MODEL or "gemini-2.0-flash-lite",
+                )
                 texto = (doc_result.get("texto") or "").strip()
-                entidades = doc_result.get("entidades", [])
+                entidades = list(doc_result.get("entidades", []))
+                texto_chars = doc_result.get("n_caracteres", len(texto))
+                fuente_extraccion = doc_result.get("fuente_extraccion")
+                error_detalle = doc_result.get("error_detalle")
 
-                if texto:
-                    if len(texto) <= 500:
-                        resumen = texto
-                    else:
-                        trunc = texto[:500]
-                        cut = trunc.rfind(" ")
-                        resumen = (trunc[:cut] if cut > 200 else trunc) + "…"
+                import logging
+                log = logging.getLogger(__name__)
+                log.info(
+                    "📄 %s · capa=%s · chars=%d · err=%s",
+                    name, fuente_extraccion, texto_chars, error_detalle or "—",
+                )
+
+                # Extracción estructurada con IA (Gemini/Claude/OpenAI)
+                if _ai_extractor and texto:
+                    try:
+                        ai_ents = _ai_extractor.extract(text=texto, filename=name)
+                        for e in ai_ents:
+                            e["fuente_archivo"] = name
+                        entidades = entidades + ai_ents
+                        log.info("🤖 IA extrajo %d campos de %s", len(ai_ents), name)
+                    except Exception as exc_ai:
+                        log.warning("AI extraction error %s: %s", name, exc_ai)
+
+                # Resumen generado por IA (omitido en documentos muy grandes para ahorrar tokens)
+                rol_para_prompt = (existing.rol_en_corpus if existing and existing.rol_en_corpus else rol_inferido)
+                if texto and _ai_extractor and len(texto) <= _SKIP_SUMMARY_THRESHOLD:
+                    try:
+                        resumen = _ai_extractor.summarize(texto, name, rol=rol_para_prompt)
+                        if resumen:
+                            log.info("📝 Resumen generado para %s (%d chars, rol=%s)", name, len(resumen), rol_para_prompt or "-")
+                    except Exception as exc_sum:
+                        log.warning("Summarize error %s: %s", name, exc_sum)
+                elif texto and _ai_extractor:
+                    log.info(
+                        "📝 Resumen IA omitido para %s (%d chars > %d) — usando truncado local",
+                        name, len(texto), _SKIP_SUMMARY_THRESHOLD,
+                    )
+                    trunc = texto[:500]
+                    cut = trunc.rfind(" ")
+                    resumen = (trunc[:cut] if cut > 200 else trunc) + "…"
+                elif texto:
+                    trunc = texto[:500]
+                    cut = trunc.rfind(" ")
+                    resumen = (trunc[:cut] if cut > 200 else trunc) + "…"
 
                 now_ent = datetime.now(timezone.utc)
                 for ent in entidades:
@@ -569,26 +809,39 @@ async def process_single_file(
                 n_entidades = len(entidades)
             except Exception as exc:
                 resumen = f"[Extracción fallida: {str(exc)[:120]}]"
+                fuente_extraccion = "failed"
+                error_detalle = str(exc)[:500]
         # tmpdir sale del contexto → archivo borrado automáticamente
 
     # Guardar/actualizar registro en corpus
     now = datetime.now(timezone.utc)
+    estado_final = "error" if fuente_extraccion == "failed" else "procesado"
     if existing:
         existing.nombre_archivo = name
         existing.tipo_archivo = tipo
         existing.tamanio_bytes = size
         existing.ruta_local = None
-        existing.estado = "procesado"
-        existing.error_msg = None
+        existing.estado = estado_final
+        existing.error_msg = error_detalle if estado_final == "error" else None
         existing.resumen = resumen
+        existing.texto_chars = texto_chars
+        existing.fuente_extraccion = fuente_extraccion
+        existing.error_detalle = error_detalle
         existing.sync_at = now
         existing.procesado_en = now
+        if not existing.rol_en_corpus and rol_inferido:
+            existing.rol_en_corpus = rol_inferido
     else:
         db.add(StudyCorpus(
             study_id=study_id, fase=fase, nombre_archivo=name,
             drive_file_id=drive_file_id, tipo_archivo=tipo,
+            rol_en_corpus=rol_inferido,
             tamanio_bytes=size, ruta_local=None,
-            estado="procesado", resumen=resumen,
+            estado=estado_final, resumen=resumen,
+            texto_chars=texto_chars,
+            fuente_extraccion=fuente_extraccion,
+            error_detalle=error_detalle,
+            error_msg=error_detalle if estado_final == "error" else None,
             sync_at=now, procesado_en=now,
         ))
 
@@ -606,7 +859,10 @@ async def process_single_file(
         "tamanio_bytes": size,
         "resumen": resumen,
         "n_entidades": n_entidades,
-        "estado": "procesado",
+        "estado": estado_final,
+        "texto_chars": texto_chars,
+        "fuente_extraccion": fuente_extraccion,
+        "error_detalle": error_detalle,
     }
 
 

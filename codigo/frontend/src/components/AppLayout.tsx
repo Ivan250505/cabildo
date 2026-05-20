@@ -17,6 +17,7 @@ function getBreadcrumb(pathname: string): string[] {
   if (pathname.match(/\/estudios\/\d+/)) return ['Estudios', 'Vista general']
   if (pathname === '/estudios') return ['Estudios']
   if (pathname === '/dashboard') return ['Dashboard']
+  if (pathname === '/resumen-ia') return ['Resumen IA']
   if (pathname === '/usuarios') return ['Administración', 'Usuarios']
   if (pathname === '/config') return ['Administración', 'Configuración']
   return []
@@ -53,6 +54,9 @@ export default function AppLayout() {
           </NavLink>
           <NavLink to="/estudios" className={({ isActive }) => `nav-item${isActive || isStudyActive ? ' active' : ''}`}>
             <span className="icon">📂</span> Estudios
+          </NavLink>
+          <NavLink to="/resumen-ia" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+            <span className="icon">🤖</span> Resumen IA
           </NavLink>
         </div>
 

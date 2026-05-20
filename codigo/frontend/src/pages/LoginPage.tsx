@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Swal from 'sweetalert2'
 import { useAuthStore } from '../stores/authStore'
 import { login } from '../api/auth'
 import IndigenousDivider from '../components/IndigenousDivider'
@@ -24,6 +25,24 @@ export default function LoginPage() {
         email: res.user.email,
         role: res.user.rol,
       })
+
+      // Modal de bienvenida
+      const nombre = res.user.nombre_completo || res.user.email
+      const rol = res.user.rol
+      await Swal.fire({
+        title: `¡Bienvenido, ${nombre}!`,
+        html:
+          `<div style="font-size:14px;color:#374151">` +
+          `Sesión iniciada como <strong>${rol}</strong>.<br><br>` +
+          `<span style="font-size:12px;color:#6b7280">Plataforma EtnIA · Ministerio del Interior</span>` +
+          `</div>`,
+        icon: 'success',
+        confirmButtonText: 'Continuar',
+        confirmButtonColor: '#1A3A5C',
+        timer: 4000,
+        timerProgressBar: true,
+      })
+
       navigate('/dashboard')
     } catch {
       setError('Correo o contraseña incorrectos. Verifique sus credenciales.')

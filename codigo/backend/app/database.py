@@ -1,16 +1,20 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool
 from app.config import get_settings
 
 settings = get_settings()
 
-# NullPool: no mantiene conexiones abiertas entre requests.
-# Necesario para Clever Cloud free tier (límite ~5 conexiones por rol).
+# Pool pequeño: 2 conexiones persistentes + hasta 3 de overflow (máx 5 total).
+# pool_pre_ping reutiliza la conexión existente o la recrea si cayó.
+# pool_recycle evita conexiones obsoletas tras inactividad prolongada.
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.ENVIRONMENT == "development",
-    poolclass=NullPool,
+    pool_size=2,
+    max_overflow=3,
+    pool_timeout=10,
+    pool_recycle=300,
+    pool_pre_ping=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(

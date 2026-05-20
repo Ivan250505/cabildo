@@ -22,7 +22,8 @@ from app.studies.models import (
 )
 from app.auth.models import User
 from app.reports.builder import build_report, docx_to_pdf
-from app.documents.ai_writer import generate_sections
+from app.reports.consolidator import consolidate_study_with_overrides
+from app.documents.ai_writer import generate_sections, generate_sections_from_consolidated
 
 logger = logging.getLogger(__name__)
 
@@ -163,13 +164,36 @@ async def build_report_bg(study_id: UUID, report_id: UUID) -> None:
                 "buffer_metros": study.buffer_metros,
             }
 
-            ai_content = generate_sections(
-                study_data=study_dict,
-                extracciones=extracciones,
-                provider=settings.AI_PROVIDER,
-                api_key=settings.AI_API_KEY,
-                model=settings.AI_MODEL,
+            # Sprint Drive E — preferir el consolidado del estudio sobre las
+            # extracciones planas. Si el corpus aún no fue procesado con v2,
+            # el consolidado vendrá casi vacío y caemos al pipeline viejo.
+            try:
+                consolidated = await consolidate_study_with_overrides(db, study_id)
+            except Exception as exc:
+                logger.warning("Consolidador falló — usando solo extracciones planas: %s", exc)
+                consolidated = None
+
+            usar_v2 = bool(
+                consolidated
+                and consolidated.get("metadata", {}).get("archivos_con_datos", 0) > 0
             )
+
+            if usar_v2:
+                ai_content = generate_sections_from_consolidated(
+                    study_data=study_dict,
+                    consolidated=consolidated,
+                    provider=settings.AI_PROVIDER,
+                    api_key=settings.AI_API_KEY,
+                    model=settings.AI_MODEL,
+                )
+            else:
+                ai_content = generate_sections(
+                    study_data=study_dict,
+                    extracciones=extracciones,
+                    provider=settings.AI_PROVIDER,
+                    api_key=settings.AI_API_KEY,
+                    model=settings.AI_MODEL,
+                )
 
             docx_bytes = build_report(
                 study_data=study_dict,
@@ -178,6 +202,7 @@ async def build_report_bg(study_id: UUID, report_id: UUID) -> None:
                 mapa_general_png=mapa_general_png,
                 mapas_por_capa_png=mapas_por_capa if mapas_por_capa else None,
                 ai_content=ai_content,
+                consolidated_data=consolidated,
             )
 
             nombre_safe = study.nombre_comunidad.replace(" ", "_")

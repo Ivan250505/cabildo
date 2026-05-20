@@ -274,27 +274,100 @@ def _add_portada(doc: Document, study_data: dict) -> None:
 
 # ── Sección I — Información general ──────────────────────────────────────────
 
-def _add_info_general(doc: Document, study_data: dict, extracciones: list[dict]) -> None:
-    _heading1(doc, "I. Información General de la Comunidad")
+def _flat_val(v):
+    """Para campos del consolidado del tipo {valor, fuente, ...}, devuelve solo el valor."""
+    if isinstance(v, dict) and "valor" in v:
+        return v["valor"]
+    return v
+
+
+def _add_info_general(
+    doc: Document,
+    study_data: dict,
+    extracciones: list[dict],
+    consolidated: dict | None = None,
+) -> None:
+    _heading1(doc, "III. Información General de la Comunidad")
+
+    ident = (consolidated or {}).get("identificacion") or {}
 
     _info_table(doc, [
-        ("Nombre de la comunidad", study_data.get("nombre_comunidad", "")),
+        ("Nombre de la comunidad", _flat_val(ident.get("nombre_comunidad")) or study_data.get("nombre_comunidad", "")),
+        ("Autodenominación",       _flat_val(ident.get("autodenominacion")) or ""),
         ("Pueblo indígena",        study_data.get("pueblo_indigena", "")),
-        ("Municipio",              study_data.get("municipio", "")),
-        ("Departamento",           study_data.get("departamento", "")),
-        ("Vereda",                 study_data.get("vereda", "")),
-        ("NIT",                    study_data.get("nit_comunidad", "")),
+        ("Municipio",              _flat_val(ident.get("municipio")) or study_data.get("municipio", "")),
+        ("Departamento",           _flat_val(ident.get("departamento")) or study_data.get("departamento", "")),
+        ("Vereda",                 _flat_val(ident.get("vereda")) or study_data.get("vereda", "")),
+        ("NIT",                    _flat_val(ident.get("nit")) or study_data.get("nit_comunidad", "")),
         ("Contrato referencia",    study_data.get("contrato_referencia", "")),
     ])
 
     doc.add_paragraph()
 
-    # Extracciones NLP relevantes
-    pob = [e for e in extracciones if e.get("tipo_dato") == "poblacion"]
-    if pob:
-        _heading2(doc, "Datos Poblacionales Identificados")
-        for e in pob[:5]:
-            _label_value(doc, "Población registrada", e.get("valor", ""))
+    _heading2(doc, "Datos Poblacionales del Corpus")
+
+    pob = (consolidated or {}).get("poblacion") or {}
+
+    if pob.get("personas") or pob.get("familias"):
+        # ── Pipeline v2: consolidado ──
+        rows: list[tuple[str, str]] = []
+        if pob.get("personas"):
+            p = pob["personas"] if isinstance(pob["personas"], dict) else {"valor": pob["personas"], "fuente": "—"}
+            rows.append(("Personas registradas", f"{p.get('valor', '—')} (según {p.get('fuente', '—')})"))
+        if pob.get("familias"):
+            f = pob["familias"] if isinstance(pob["familias"], dict) else {"valor": pob["familias"], "fuente": "—"}
+            rows.append(("Familias registradas", f"{f.get('valor', '—')} (según {f.get('fuente', '—')})"))
+        if pob.get("fecha_censo"):
+            fc = pob["fecha_censo"] if isinstance(pob["fecha_censo"], dict) else {"valor": pob["fecha_censo"]}
+            rows.append(("Fecha del censo", str(fc.get("valor", "—"))))
+        if pob.get("fuente_censo"):
+            sc = pob["fuente_censo"] if isinstance(pob["fuente_censo"], dict) else {"valor": pob["fuente_censo"]}
+            rows.append(("Fuente del censo", str(sc.get("valor", "—"))))
+        if rows:
+            _info_table(doc, rows)
+
+        if pob.get("discrepancias"):
+            _heading3(doc, "⚠ Discrepancias detectadas")
+            for d in pob["discrepancias"][:5]:
+                _body(doc,
+                    f"En el campo '{d.get('campo', '?')}', {d.get('fuente_a', '?')} reporta "
+                    f"{d.get('valor_a', '?')} mientras que {d.get('fuente_b', '?')} reporta "
+                    f"{d.get('valor_b', '?')}. Se priorizó el primero.",
+                    italic=True,
+                )
+
+        if pob.get("distribucion_por_edad"):
+            _heading3(doc, "Distribución por edad")
+            edad_rows = [(f"Rango {ed.get('rango', '?')}", str(ed.get("cantidad", 0)))
+                         for ed in pob["distribucion_por_edad"]]
+            if edad_rows:
+                _info_table(doc, edad_rows)
+    else:
+        # ── Pipeline viejo: extracciones planas ──
+        pob_tipos = [e for e in extracciones if e.get("tipo_dato") in (
+            "familias_count", "personas_count", "fecha_censo", "fuente_censo", "poblacion"
+        )]
+        if pob_tipos:
+            datos_pob = {e["tipo_dato"]: e.get("valor", "") for e in pob_tipos}
+            pob_rows = []
+            if datos_pob.get("familias_count"):
+                pob_rows.append(("Familias registradas", datos_pob["familias_count"]))
+            if datos_pob.get("personas_count"):
+                pob_rows.append(("Personas registradas", datos_pob["personas_count"]))
+            if datos_pob.get("poblacion") and not datos_pob.get("personas_count"):
+                pob_rows.append(("Población registrada", datos_pob["poblacion"]))
+            if datos_pob.get("fecha_censo"):
+                pob_rows.append(("Fecha del censo", datos_pob["fecha_censo"]))
+            if datos_pob.get("fuente_censo"):
+                pob_rows.append(("Fuente del censo", datos_pob["fuente_censo"]))
+            if pob_rows:
+                _info_table(doc, pob_rows)
+        else:
+            _body(doc,
+                "Los datos poblacionales se encuentran en el corpus documental adjunto. "
+                "Ejecute la extracción documental para poblar esta sección.",
+                italic=True,
+            )
 
     notas = study_data.get("notas_adicionales")
     if notas:
@@ -316,6 +389,7 @@ _MARCO_LEGAL = (
 
 def _add_marco_legal(doc: Document) -> None:
     _heading1(doc, "II. Marco Legal y Normativo")
+
     _body(doc, _MARCO_LEGAL)
     _heading2(doc, "Motivos de Reconocimiento")
     motivos = [
@@ -339,7 +413,7 @@ def _add_analisis_sig(
     mapas_por_capa_png: dict[str, bytes] | None,
     buffer_metros: int,
 ) -> None:
-    _heading1(doc, "III. Análisis Georreferenciado del Territorio")
+    _heading1(doc, "VIII. Análisis Georreferenciado del Territorio")
 
     _body(
         doc,
@@ -433,87 +507,147 @@ def _add_analisis_sig(
             cap.runs[0].italic = True
 
 
-# ── Sección IV — Historia y contexto ─────────────────────────────────────────
+# ── Sección I — Presentación ──────────────────────────────────────────────────
 
-def _add_historia(doc: Document, ai_content: dict) -> None:
-    _heading1(doc, "III. Historia y Contexto de la Comunidad")
-    texto = ai_content.get("historia")
+def _add_presentacion(doc: Document, study_data: dict, ai_content: dict) -> None:
+    _heading1(doc, "I. Presentación")
+    texto_ia = ai_content.get("presentacion")
+    if texto_ia:
+        for parrafo in texto_ia.split("\n\n"):
+            parrafo = parrafo.strip()
+            if parrafo:
+                _body(doc, parrafo)
+    else:
+        comunidad = study_data.get("nombre_comunidad", "la comunidad")
+        contrato  = study_data.get("contrato_referencia", "")
+        municipio = study_data.get("municipio", "")
+        pueblo    = study_data.get("pueblo_indigena", "")
+        _body(doc,
+            f"El presente documento constituye el estudio etnológico elaborado en el marco del "
+            f"{'contrato ' + contrato if contrato else 'contrato suscrito'} con el Ministerio del "
+            f"Interior — Dirección de Asuntos Indígenas, ROM y Minorías (DAIRM), con el propósito "
+            f"de adelantar el proceso de reconocimiento formal de {comunidad}"
+            + (f", comunidad perteneciente al pueblo {pueblo}" if pueblo else "")
+            + (f", ubicada en el municipio de {municipio}" if municipio else "")
+            + "."
+        )
+        _body(doc,
+            "La investigación se desarrolló mediante la revisión y análisis del corpus documental "
+            "allegado por la comunidad, que incluye actas de constitución, censos, declaraciones "
+            "de identidad, registros culturales y demás documentación soporte. La información "
+            "recogida fue sistematizada y contrastada con la normativa vigente para el "
+            "reconocimiento de comunidades indígenas en Colombia.",
+            italic=True,
+        )
+
+
+# ── Sección IV — Reseña histórica ────────────────────────────────────────────
+
+def _add_resena_historica(doc: Document, ai_content: dict, extracciones: list[dict]) -> None:
+    _heading1(doc, "IV. Reseña Histórica")
+    texto = ai_content.get("resena_historica")
     if texto:
         for parrafo in texto.split("\n\n"):
             parrafo = parrafo.strip()
             if parrafo:
                 _body(doc, parrafo)
     else:
-        _body(
-            doc,
-            "La historia de la comunidad, su origen y los antecedentes del proceso "
-            "de reconocimiento ante el Ministerio del Interior reposan en el corpus "
-            "documental anexo, en particular en la reseña histórica y las actas de "
-            "elección de autoridades tradicionales.",
-            italic=True,
+        _fallback_por_tipos(doc, extracciones,
+            ["narrativa_origen", "trayectoria_migratoria", "fecha_historica", "evento_historico"],
+            "Los antecedentes históricos, el proceso de asentamiento y los motivos del "
+            "reconocimiento se encuentran documentados en el corpus adjunto, en particular "
+            "en la reseña histórica y las actas de constitución.",
         )
 
 
-# ── Sección V — Caracterización etnológica ────────────────────────────────────
+# ── Sección V — Conciencia de identidad ──────────────────────────────────────
+
+def _add_conciencia_identidad(doc: Document, ai_content: dict, extracciones: list[dict]) -> None:
+    _heading1(doc, "V. Conciencia de Identidad")
+    texto = ai_content.get("conciencia_identidad")
+    if texto:
+        for parrafo in texto.split("\n\n"):
+            parrafo = parrafo.strip()
+            if parrafo:
+                _body(doc, parrafo)
+    else:
+        _fallback_por_tipos(doc, extracciones,
+            ["autoidentificacion", "nombre_indigena", "clan_indigena", "lengua_indigena", "nivel_uso_lengua"],
+            "Los elementos de auto-identificación, uso de la lengua y continuidad cultural "
+            "se encuentran registrados en las declaraciones y documentos del corpus adjunto.",
+        )
+
+
+# ── Sección VI — Caracterización etnológica ──────────────────────────────────
 
 def _add_caracterizacion(doc: Document, extracciones: list[dict], ai_content: dict) -> None:
-    _heading1(doc, "IV. Caracterización Etnológica")
-
-    _body(
-        doc,
-        "A continuación se presentan los elementos de identidad cultural identificados "
-        "durante el trabajo de campo y en el análisis del corpus documental, "
-        "organizados según las cuatro dimensiones temáticas de la investigación.",
+    _heading1(doc, "VI. Caracterización Etnológica")
+    _body(doc,
+        "A continuación se presenta la caracterización etnológica de la comunidad, "
+        "organizada en dos dimensiones: la intrarelacional, que abarca los elementos "
+        "culturales, espirituales y organizativos propios; y la interrelacional, que "
+        "describe las relaciones con el entorno institucional y social externo.",
     )
 
-    subsecciones = [
-        ("Prácticas Culturales", "practicas_culturales"),
-        ("Expresiones Simbólicas", "expresiones_simbolicas"),
-        ("Entornos Territoriales", "entornos_territoriales"),
-        ("Procesos Organizativos", "procesos_organizativos"),
-    ]
+    # 6.1 Intrarelacional
+    _heading2(doc, "6.1 Caracterización Intrarelacional")
+    texto_intra = ai_content.get("caracterizacion_intrarelacional")
+    if texto_intra:
+        for parrafo in texto_intra.split("\n\n"):
+            parrafo = parrafo.strip()
+            if parrafo:
+                _body(doc, parrafo)
+    else:
+        _fallback_por_tipos(doc, extracciones,
+            [
+                "actividad_cultural", "ritual_central", "cosmogonia", "lugar_sagrado",
+                "planta_sagrada", "tecnologia_espiritual", "elemento_sagrado",
+                "actividad_subsistencia", "herramienta_tradicional",
+                "estructura_politica", "autoridad_cargo", "reglamento_interno_detalle",
+                "territorio_descripcion", "vereda", "resguardo",
+            ],
+            "El análisis de las prácticas culturales, rituales, territorialidad y gobierno "
+            "propio reposa en el corpus documental anexo.",
+        )
 
-    for titulo, ai_key in subsecciones:
-        _heading2(doc, titulo)
-        texto_ia = ai_content.get(ai_key)
-        if texto_ia:
-            for parrafo in texto_ia.split("\n\n"):
-                parrafo = parrafo.strip()
-                if parrafo:
-                    _body(doc, parrafo)
-        else:
-            # Fallback: filtrar extracciones por palabras clave
-            palabras = {
-                "practicas_culturales": ["practica", "cultural", "tradicion", "actividad_cultural"],
-                "expresiones_simbolicas": ["simbolo", "expresion", "ritual", "ceremonia"],
-                "entornos_territoriales": ["territorio", "entorno", "sitio", "lugar"],
-                "procesos_organizativos": ["organizacion", "autoridad", "gobernanza", "representante"],
-            }
-            claves = palabras.get(ai_key, [])
-            relevantes = [
-                e for e in extracciones
-                if any(k in (e.get("tipo_dato", "") + " " + (e.get("valor") or "")).lower()
-                       for k in claves)
-            ]
-            if relevantes:
-                for e in relevantes[:8]:
-                    valor = e.get("valor", "").strip()
-                    if valor:
-                        p = doc.add_paragraph(f"• {valor}", style="List Bullet")
-                        p.runs[0].font.size = Pt(11)
-                        p.runs[0].font.name = "Calibri"
-            else:
-                _body(
-                    doc,
-                    "Información recopilada durante el trabajo de campo. Ver corpus documental anexo.",
-                    italic=True,
-                )
+    # 6.2 Interrelacional
+    _heading2(doc, "6.2 Caracterización Interrelacional")
+    texto_inter = ai_content.get("caracterizacion_interrelacional")
+    if texto_inter:
+        for parrafo in texto_inter.split("\n\n"):
+            parrafo = parrafo.strip()
+            if parrafo:
+                _body(doc, parrafo)
+    else:
+        _fallback_por_tipos(doc, extracciones,
+            ["alianza_interetnica", "relacion_institucional", "actores_externos"],
+            "Las relaciones interinstitucionales y con comunidades vecinas están "
+            "documentadas en el corpus adjunto.",
+        )
 
 
-# ── Sección VI — Conclusiones ─────────────────────────────────────────────────
+# ── Sección VII — Prospectiva ─────────────────────────────────────────────────
+
+def _add_prospectiva(doc: Document, ai_content: dict, extracciones: list[dict]) -> None:
+    _heading1(doc, "VII. Prospectiva")
+    texto = ai_content.get("prospectiva")
+    if texto:
+        for parrafo in texto.split("\n\n"):
+            parrafo = parrafo.strip()
+            if parrafo:
+                _body(doc, parrafo)
+    else:
+        _fallback_por_tipos(doc, extracciones,
+            ["amenaza_seguridad", "despojo_historico", "vision_futuro", "actividad_economica"],
+            "Las amenazas al territorio, los despojos históricos y la visión de futuro de "
+            "la comunidad están registrados en el corpus documental adjunto.",
+        )
+
+
+# ── Sección IX — Conclusiones ─────────────────────────────────────────────────
 
 def _add_conclusiones(doc: Document, study_data: dict, n_capas: int, n_puntos: int, ai_content: dict) -> None:
-    _heading1(doc, "V. Conclusiones y Recomendaciones")
+    _heading1(doc, "IX. Conclusiones y Recomendaciones")
 
     texto_ia = ai_content.get("conclusiones")
     if texto_ia:
@@ -528,28 +662,137 @@ def _add_conclusiones(doc: Document, study_data: dict, n_capas: int, n_puntos: i
         dept = study_data.get("departamento", "")
 
         texto = (
-            f"El análisis etnológico realizado a {comunidad}"
+            f"El análisis etnológico realizado sobre {comunidad}"
             + (f", perteneciente al pueblo {pueblo}," if pueblo else "")
             + f" ubicada en el municipio de {municipio}, departamento de {dept}, "
             f"permitió identificar y documentar los elementos constitutivos de su identidad "
-            f"cultural a través del análisis de {n_capas} capas temáticas con un total de "
-            f"{n_puntos} sitios georreferenciados. "
-            f"Con base en la evidencia documental y geográfica recopilada, se recomienda "
-            f"continuar con el proceso de reconocimiento ante el Ministerio del Interior."
+            f"cultural. El corpus documental analizado y los datos georreferenciados "
+            f"({n_capas} capas, {n_puntos} sitios) respaldan la continuidad cultural y la "
+            f"organización propia de la comunidad. Con base en la evidencia recopilada, "
+            f"se recomienda continuar con el proceso de reconocimiento formal ante la DAIRM."
         )
         _body(doc, texto)
 
         _heading2(doc, "Recomendaciones")
         recomendaciones = [
             "Verificar y actualizar los datos del autocenso con las autoridades tradicionales.",
-            "Complementar el registro fotográfico de los sitios de valor cultural identificados.",
-            "Coordinar con la Dirección de Asuntos Indígenas la agenda de visita oficial.",
+            "Complementar el registro fotográfico y etnográfico de los sitios de valor cultural.",
+            "Coordinar con la Dirección de Asuntos Indígenas la agenda de visita de verificación.",
             "Mantener actualizados los registros SIG a medida que se identifiquen nuevos sitios.",
+            "Consolidar el reglamento interno y el plan de vida de la comunidad.",
         ]
         for r in recomendaciones:
             p = doc.add_paragraph(r, style="List Bullet")
             p.runs[0].font.size = Pt(11)
             p.runs[0].font.name = "Calibri"
+
+
+# ── Sección X — Fuentes citadas (Sprint Drive E) ──────────────────────────────
+
+_ROL_LABEL: dict[str, str] = {
+    "ficha_precampo": "Ficha de Pre-campo",
+    "reglamento": "Reglamento Interno",
+    "acta_eleccion": "Acta de Elección",
+    "acta_posesion": "Acta de Posesión",
+    "autocenso": "Autocenso",
+    "autocenso_depurado": "Autocenso Depurado",
+    "censo_comunidad": "Censo de la Comunidad",
+    "resena_historica": "Reseña Histórica",
+    "ficha_comision": "Ficha de Comisión",
+    "diario_campo": "Diario de Campo",
+    "acta_inicio": "Acta de Inicio",
+    "arbol_riesgo": "Árbol de Riesgos",
+    "registro_asistencia": "Registro de Asistencia",
+    "apuntes_reuniones": "Apuntes de Reuniones",
+    "cartografia_social": "Cartografía Social",
+    "geopackage": "GeoPackage / Shapefile",
+    "proyecto_qgis": "Proyecto QGIS",
+    "evidencia_foto": "Evidencia Fotográfica",
+    "solicitud_formal": "Solicitud Formal",
+    "rut_comunidad": "RUT de la Comunidad",
+    "mapa_territorial": "Mapa Territorial",
+    "base_datos_dane": "Base de Datos DANE",
+    "cronograma": "Cronograma",
+    "generico": "Documento sin tipo definido",
+    "otro": "Otro",
+}
+
+
+def _add_fuentes_citadas(doc: Document, consolidated: dict | None) -> None:
+    """Sección X del informe: archivos del corpus que aportaron datos al estudio."""
+    if not consolidated:
+        return
+    fuentes = consolidated.get("fuentes") or []
+    con_datos = [f for f in fuentes if f.get("tiene_datos")]
+    if not con_datos:
+        return
+
+    _heading1(doc, "X. Fuentes Citadas y Corpus Documental")
+    _body(doc,
+        "A continuación se relacionan los documentos del corpus que aportaron datos al "
+        "análisis etnológico de esta comunidad. Cada uno fue clasificado por tipo, "
+        "procesado mediante extracción dirigida y consolidado en una base de datos "
+        "estructurada que sustenta las secciones anteriores del informe."
+    )
+
+    # Tabla con columnas: archivo, tipo, método, fecha de procesamiento
+    headers = ["Archivo", "Tipo de documento", "Método", "Procesado"]
+    data = []
+    for f in con_datos:
+        rol = f.get("rol") or "otro"
+        nombre = f.get("nombre_archivo") or "—"
+        if len(nombre) > 60:
+            nombre = nombre[:57] + "…"
+        metodo = f.get("fuente_extraccion") or f.get("extraido_con_modelo") or "—"
+        fecha = (f.get("extraido_en") or "")[:10] or "—"
+        data.append([nombre, _ROL_LABEL.get(rol, rol), metodo, fecha])
+    _matrix_table(doc, headers, data)
+
+    # Si hubo archivos del corpus sin datos, registrarlos
+    sin_datos = [f for f in fuentes if not f.get("tiene_datos")]
+    if sin_datos:
+        doc.add_paragraph()
+        _heading2(doc, "Archivos del corpus no procesados")
+        _body(doc,
+            f"Los siguientes {len(sin_datos)} archivos forman parte del corpus pero "
+            "aún no produjeron datos estructurados (procesamiento pendiente, formato "
+            "no soportado o errores que requieren atención):",
+            italic=True,
+        )
+        data_sd = []
+        for f in sin_datos:
+            nombre = (f.get("nombre_archivo") or "—")[:60]
+            rol = _ROL_LABEL.get(f.get("rol") or "otro", "Otro")
+            data_sd.append([nombre, rol, f.get("fuente_extraccion") or "—"])
+        if data_sd:
+            _matrix_table(doc, ["Archivo", "Tipo", "Método/estado"], data_sd)
+
+
+# ── Helper interno: fallback con datos del corpus ─────────────────────────────
+
+def _fallback_por_tipos(
+    doc: Document,
+    extracciones: list[dict],
+    tipos: list[str],
+    nota_fallback: str,
+) -> None:
+    """Muestra los valores extraídos de los tipos indicados; si no hay, pone la nota."""
+    relevantes = [
+        e for e in extracciones
+        if e.get("tipo_dato") in tipos and (e.get("valor") or "").strip()
+    ]
+    if relevantes:
+        vistos: set[str] = set()
+        for e in relevantes:
+            valor = (e.get("valor") or "").strip()
+            if valor and valor not in vistos and len(valor) > 5:
+                vistos.add(valor)
+                p = doc.add_paragraph(style="List Bullet")
+                p.paragraph_format.space_after = Pt(3)
+                run = p.add_run(valor)
+                run.font.size = Pt(11)
+                run.font.name = "Calibri"
+    _body(doc, nota_fallback, italic=True)
 
 
 # ── Constructor principal ──────────────────────────────────────────────────────
@@ -561,16 +804,21 @@ def build_report(
     mapa_general_png: bytes | None = None,
     mapas_por_capa_png: dict[str, bytes] | None = None,
     ai_content: dict | None = None,
+    consolidated_data: dict | None = None,
 ) -> bytes:
     """
     Construye el documento Word completo y retorna los bytes del .docx.
 
     Args:
         study_data:       Dict con los campos del modelo Study.
-        extracciones:     Lista de CorpusExtraction como dicts.
+        extracciones:     Lista de CorpusExtraction como dicts (pipeline viejo).
         gis_results:      Lista de GISResult como dicts (con resultado_json).
         mapa_general_png: PNG del mapa general (opcional).
         mapas_por_capa_png: Dict {nombre_capa: bytes PNG} (opcional).
+        ai_content:       Texto narrativo por sección (de ai_writer).
+        consolidated_data: Sprint Drive E — consolidado del estudio. Si está
+                          presente, las tablas y la sección de fuentes citadas
+                          se llenan desde aquí en lugar de las extracciones.
     """
     doc = Document()
 
@@ -609,18 +857,7 @@ def build_report(
 
     ai = ai_content or {}
 
-    # Secciones del informe
-    _add_portada(doc, study_data)
-    _add_marco_legal(doc)
-    _page_break(doc)
-    _add_info_general(doc, study_data, extracciones)
-    _page_break(doc)
-    _add_historia(doc, ai)
-    _page_break(doc)
-    _add_caracterizacion(doc, extracciones, ai)
-    _page_break(doc)
-
-    # Calcular métricas SIG para conclusiones
+    # Calcular métricas SIG
     n_capas = len(mapas_por_capa_png) if mapas_por_capa_png else 0
     n_puntos = sum(
         r.get("resultado_json", {}).get("n_puntos_a", 0)
@@ -628,12 +865,33 @@ def build_report(
         if r.get("tipo_resultado") == "matriz_distancia"
     )
 
+    # Secciones del informe — estructura real FASE 3
+    _add_portada(doc, study_data)
+    _add_presentacion(doc, study_data, ai)
+    _page_break(doc)
+    _add_marco_legal(doc)
+    _page_break(doc)
+    _add_info_general(doc, study_data, extracciones, consolidated_data)
+    _page_break(doc)
+    _add_resena_historica(doc, ai, extracciones)
+    _page_break(doc)
+    _add_conciencia_identidad(doc, ai, extracciones)
+    _page_break(doc)
+    _add_caracterizacion(doc, extracciones, ai)
+    _page_break(doc)
+    _add_prospectiva(doc, ai, extracciones)
+    _page_break(doc)
     _add_analisis_sig(
         doc, gis_results, mapa_general_png, mapas_por_capa_png,
         study_data.get("buffer_metros", 50),
     )
     _page_break(doc)
     _add_conclusiones(doc, study_data, n_capas, n_puntos, ai)
+
+    # Sprint Drive E — sección X: fuentes citadas
+    if consolidated_data:
+        _page_break(doc)
+        _add_fuentes_citadas(doc, consolidated_data)
 
     buf = io.BytesIO()
     doc.save(buf)

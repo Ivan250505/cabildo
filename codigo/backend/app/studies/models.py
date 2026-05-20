@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Text, Integer, Numeric, ForeignKey, Enum as SAEnum, JSON
+from sqlalchemy import String, DateTime, Text, Integer, Numeric, ForeignKey, Enum as SAEnum, JSON, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
@@ -10,6 +10,8 @@ STUDY_STATES = (
     "borrador", "sincronizando", "corpus_ok", "procesando",
     "listo_revision", "en_revision", "aprobado", "exportado", "error"
 )
+
+STUDY_MODOS = ("drive_existente", "encuestas_nuevas")
 
 CORPUS_FILE_TYPES = ("pdf", "docx", "xlsx", "qgz", "gpkg", "shp", "jpg", "heic", "mp4", "mp3", "otro")
 
@@ -43,6 +45,9 @@ class Study(Base):
     estado: Mapped[str] = mapped_column(
         SAEnum(*STUDY_STATES, name="study_estado"), nullable=False, default="borrador"
     )
+    modo_creacion: Mapped[str] = mapped_column(
+        SAEnum(*STUDY_MODOS, name="study_modo"), nullable=False, default="drive_existente"
+    )
     error_msg: Mapped[str | None] = mapped_column(Text)
 
     url_drive_fase1: Mapped[str | None] = mapped_column(Text)
@@ -51,6 +56,10 @@ class Study(Base):
     drive_folder_id: Mapped[str | None] = mapped_column(String(200))
 
     buffer_metros: Mapped[int] = mapped_column(Integer, default=50)
+    # Sprint Drive E — overrides manuales del usuario sobre el consolidado
+    # Estructura: { "<campo_punto_path>": {"valor": ..., "fuente": "manual", "nota": ...} }
+    # Ej: { "poblacion.personas": {"valor": 290, "fuente": "manual", "nota": "Conteo verificado"} }
+    consolidacion_overrides: Mapped[dict | None] = mapped_column(JSON)
 
     responsable_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
@@ -90,11 +99,23 @@ class StudyCorpus(Base):
     tamanio_bytes: Mapped[int | None] = mapped_column(Integer)
     ruta_local: Mapped[str | None] = mapped_column(Text)
     estado: Mapped[str] = mapped_column(
-        SAEnum("pendiente", "descargado", "procesado", "error", name="corpus_estado"),
+        SAEnum("pendiente", "descargado", "clasificado", "procesado", "error", name="corpus_estado"),
         default="pendiente",
     )
     error_msg: Mapped[str | None] = mapped_column(Text)
     resumen: Mapped[str | None] = mapped_column(Text)
+    texto_chars: Mapped[int | None] = mapped_column(Integer)
+    fuente_extraccion: Mapped[str | None] = mapped_column(String(50))
+    error_detalle: Mapped[str | None] = mapped_column(Text)
+    clasificacion_fuente: Mapped[str | None] = mapped_column(String(40))
+    clasificacion_confianza: Mapped[float | None] = mapped_column(Numeric(4, 3))
+    notas_clasificacion: Mapped[str | None] = mapped_column(Text)
+    # Sprint Drive B — 1 archivo = 1 JSON estructurado
+    datos_estructurados: Mapped[dict | None] = mapped_column(JSON)
+    esquema_version: Mapped[str | None] = mapped_column(String(40))
+    extraido_con_modelo: Mapped[str | None] = mapped_column(String(80))
+    extraido_en_v2: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    hash_sha256: Mapped[str | None] = mapped_column(String(64), index=True)
     sync_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     procesado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -113,6 +134,9 @@ class CorpusExtraction(Base):
     fuente_archivo: Mapped[str | None] = mapped_column(String(500))
     confianza: Mapped[float | None] = mapped_column(Numeric(4, 3))
     extraido_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    # Sprint Drive B — true = generado por el pipeline antiguo (sopa de filas).
+    # Las extracciones derivadas del nuevo datos_estructurados llevan legacy=false.
+    legacy: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
 
 class GISResult(Base):
@@ -156,6 +180,32 @@ class Report(Base):
     exportado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     study: Mapped["Study"] = relationship("Study", back_populates="reports")
+
+
+LOCATION_TIPOS = (
+    "sede_cabildo", "sitio_sagrado", "territorio_ancestral",
+    "lugar_historico", "ruta_migratoria", "punto_geografico",
+)
+
+
+class StudyLocation(Base):
+    """Coordenada geográfica extraída del corpus documental por la IA."""
+    __tablename__ = "study_locations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    study_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("studies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    nombre: Mapped[str] = mapped_column(String(300), nullable=False)
+    tipo: Mapped[str] = mapped_column(
+        SAEnum(*LOCATION_TIPOS, name="location_tipo"), nullable=False, default="punto_geografico"
+    )
+    lat: Mapped[float] = mapped_column(Numeric(10, 7), nullable=False)
+    lng: Mapped[float] = mapped_column(Numeric(10, 7), nullable=False)
+    descripcion: Mapped[str | None] = mapped_column(Text)
+    fuente_archivo: Mapped[str | None] = mapped_column(String(500))
+    confianza: Mapped[float | None] = mapped_column(Numeric(4, 3))
+    extraido_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class AuditLog(Base):
