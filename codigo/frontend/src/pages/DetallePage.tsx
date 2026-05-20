@@ -23,10 +23,6 @@ import Swal from 'sweetalert2'
 
 const TABS = ['📁 FASE 1 — Pre-campo', '📁 FASE 2 — Campo', '☁ Google Drive', '📊 Consolidado']
 
-// Sprints 0-5 (encuestas dinámicas): lógica intacta, accesos visibles ocultos.
-// Reactivar cambiando a true.
-const ENCUESTAS_VISIBLES = false
-
 const TIPO_ICON: Record<string, string> = {
   pdf: '📄', docx: '📝', xlsx: '📊', qgz: '🗺', gpkg: '🗄',
   shp: '📐', jpg: '🖼', heic: '🖼', mp4: '🎬', mp3: '🎙',
@@ -416,30 +412,12 @@ export default function DetallePage() {
                 {study.municipio}, {study.departamento}
                 {study.contrato_referencia && <> · Contrato: {study.contrato_referencia}</>}
               </div>
-              {ENCUESTAS_VISIBLES && (
-                <div style={{ marginTop: 8 }}>
-                  {study.modo_creacion === 'encuestas_nuevas' ? (
-                    <span className="badge badge-success" style={{ fontSize: 11 }}>
-                      ✏ Origen: Encuestas en plataforma
-                    </span>
-                  ) : (
-                    <span className="badge badge-info" style={{ fontSize: 11 }}>
-                      📂 Origen: Google Drive
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
             <div className="flex gap-2">
               <span className={`badge ${ESTADO_BADGE[study.estado as StudyEstado] ?? 'badge-neutral'}`} style={{ fontSize: 13, padding: '6px 14px' }}>
                 <span className="badge-dot" />
                 {ESTADO_LABEL[study.estado as StudyEstado] ?? study.estado}
               </span>
-              {ENCUESTAS_VISIBLES && study.modo_creacion === 'encuestas_nuevas' && (
-                <Link to={`/estudios/${study.id}/encuestas`} className="btn btn-outline">
-                  ✏ Ir a encuestas
-                </Link>
-              )}
               <Link to={`/estudios/${study.id}/mapa`} className="btn btn-outline">
                 📍 Georreferenciación
               </Link>

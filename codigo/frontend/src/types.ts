@@ -14,8 +14,6 @@ export interface Study {
   updated_at: string
 }
 
-export type StudyModo = 'drive_existente' | 'encuestas_nuevas'
-
 export interface StudyDetail extends Study {
   vereda: string | null
   nit_comunidad: string | null
@@ -23,7 +21,6 @@ export interface StudyDetail extends Study {
   notas_adicionales: string | null
   lat: number | null
   lng: number | null
-  modo_creacion: StudyModo
   error_msg: string | null
   url_drive_fase1: string | null
   url_drive_fase2: string | null

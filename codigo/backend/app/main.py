@@ -16,13 +16,6 @@ from app.gis.router import router as gis_router
 from app.map.router import router as map_router
 from app.documents.router import router as documents_router
 from app.quick_router import router as quick_router
-from app.surveys.router import router as surveys_router
-from app.surveys import models as _surveys_models  # noqa: F401 — registra modelos
-from app.surveys.seed import (
-    seed_acta_inicio, seed_apuntes_reuniones, seed_diario_campo,
-    seed_ficha_comision, seed_ficha_precampo,
-    seed_registro_asistencia, seed_survey_catalog,
-)
 from app.audit.middleware import AuditMiddleware
 
 settings = get_settings()
@@ -67,9 +60,11 @@ async def _run_startup(retries: int = 5, delay: float = 3.0) -> None:
                     "CREATE INDEX IF NOT EXISTS ix_corpus_extractions_legacy ON corpus_extractions (legacy)",
                     # Backfill: las extracciones existentes (del pipeline viejo) quedan marcadas legacy=true
                     "UPDATE corpus_extractions SET legacy = true WHERE legacy = false AND extraido_en < CURRENT_DATE",
-                    "ALTER TABLE studies ADD COLUMN IF NOT EXISTS modo_creacion VARCHAR(30) DEFAULT 'drive_existente' NOT NULL",
                     # Sprint Drive E — overrides del consolidado
                     "ALTER TABLE studies ADD COLUMN IF NOT EXISTS consolidacion_overrides JSONB",
+                    # Limpieza: modo_creacion ya no se usa (encuestas eliminadas)
+                    "ALTER TABLE studies DROP COLUMN IF EXISTS modo_creacion",
+                    "DROP TYPE IF EXISTS study_modo",
                 ]:
                     await conn.execute(text(stmt))
             return
@@ -107,20 +102,6 @@ def _check_ai_provider() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await _run_startup()
-    # Seed catálogo de encuestas (idempotente)
-    from app.database import AsyncSessionLocal
-    try:
-        async with AsyncSessionLocal() as db:
-            await seed_survey_catalog(db)
-            await seed_ficha_precampo(db)
-            await seed_acta_inicio(db)
-            await seed_registro_asistencia(db)
-            await seed_ficha_comision(db)
-            await seed_diario_campo(db)
-            await seed_apuntes_reuniones(db)
-            await db.commit()
-    except Exception as e:
-        logging.warning("Seed encuestas falló: %s", e)
     yield
     await engine.dispose()
 
@@ -153,7 +134,6 @@ app.include_router(gis_router)
 app.include_router(reports_router)
 app.include_router(map_router)
 app.include_router(quick_router)
-app.include_router(surveys_router)
 
 
 @app.get("/health", tags=["sistema"])

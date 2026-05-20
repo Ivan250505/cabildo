@@ -30,7 +30,6 @@ export async function createStudy(payload: {
   lat?: number
   lng?: number
   buffer_metros?: number
-  modo_creacion?: 'drive_existente' | 'encuestas_nuevas'
 }): Promise<StudyDetail> {
   const { data } = await client.post<StudyDetail>('studies', payload)
   return data

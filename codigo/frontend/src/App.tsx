@@ -12,8 +12,6 @@ import ConfigPage from './pages/ConfigPage'
 import DebugPage from './pages/DebugPage'
 import MapaCalorPage from './pages/MapaCalorPage'
 import ResumenIAPage from './pages/ResumenIAPage'
-import EncuestasPage from './pages/EncuestasPage'
-import FormularioPage from './pages/FormularioPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuthStore()
@@ -41,8 +39,6 @@ export default function App() {
         <Route path="estudios/:id/revision" element={<RevisionPage />} />
         <Route path="estudios/:id/debug" element={<DebugPage />} />
         <Route path="estudios/:id/mapa" element={<MapaCalorPage />} />
-        <Route path="estudios/:id/encuestas" element={<EncuestasPage />} />
-        <Route path="estudios/:id/encuestas/:code" element={<FormularioPage />} />
         <Route path="resumen-ia" element={<ResumenIAPage />} />
         <Route path="usuarios" element={<UsuariosPage />} />
         <Route path="config" element={<ConfigPage />} />

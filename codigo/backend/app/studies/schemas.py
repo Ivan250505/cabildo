@@ -24,7 +24,6 @@ class StudyCreate(BaseModel):
     url_drive_fase3: str | None = None
     buffer_metros: int = Field(50, ge=10, le=500)
     responsable_id: UUID | None = None
-    modo_creacion: Literal["drive_existente", "encuestas_nuevas"] = "drive_existente"
 
 
 class StudyUpdate(BaseModel):
@@ -77,7 +76,6 @@ class StudyResponse(BaseModel):
     lat: float | None
     lng: float | None
     estado: str
-    modo_creacion: str
     error_msg: str | None
     url_drive_fase1: str | None
     url_drive_fase2: str | None

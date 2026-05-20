@@ -1,15 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getStudies, createStudy, deleteStudy } from '../api/studies'
 import { ESTADO_LABEL, ESTADO_BADGE } from './estadoUtils'
 import { DEPARTAMENTOS, getMunicipios } from '../data/colombia'
-import type { Study, StudyEstado, StudyModo } from '../types'
-
-// Sprints 0-5 (encuestas dinámicas): lógica completa en backend + frontend,
-// pero los puntos de entrada visibles permanecen ocultos por decisión de producto.
-// Reactivar cambiando a true.
-const ENCUESTAS_VISIBLES = false
+import type { Study, StudyEstado } from '../types'
 
 const ESTADOS: { value: string; label: string }[] = [
   { value: '', label: 'Todos los estados' },
@@ -28,40 +23,21 @@ const BLANK_STUDY = { nombre_comunidad: '', pueblo_indigena: '', municipio: '', 
 export default function EstudiosPage() {
   const [search, setSearch] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('')
-  const [showSelector, setShowSelector] = useState(false)
   const [showModal, setShowModal] = useState(false)
-  const [modoCreacion, setModoCreacion] = useState<StudyModo>('drive_existente')
   const [form, setForm] = useState(BLANK_STUDY)
   const [studyToDelete, setStudyToDelete] = useState<Study | null>(null)
   const qc = useQueryClient()
-  const navigate = useNavigate()
 
   const crear = useMutation({
     mutationFn: createStudy,
-    onSuccess: (nuevo) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['studies'] })
       setShowModal(false)
       setForm(BLANK_STUDY)
-      // Si fue modo "encuestas_nuevas", llevarlo directo a EncuestasPage
-      if (modoCreacion === 'encuestas_nuevas' && nuevo?.id) {
-        navigate(`/estudios/${nuevo.id}/encuestas`)
-      }
     },
   })
 
-  function abrirSelector() {
-    if (ENCUESTAS_VISIBLES) {
-      setShowSelector(true)
-    } else {
-      // Modo encuestas oculto: saltar selector y crear siempre como "drive_existente"
-      setModoCreacion('drive_existente')
-      setShowModal(true)
-    }
-  }
-
-  function seleccionarModo(modo: StudyModo) {
-    setModoCreacion(modo)
-    setShowSelector(false)
+  function abrirNuevoEstudio() {
     setShowModal(true)
   }
 
@@ -98,7 +74,7 @@ export default function EstudiosPage() {
             {isLoading ? 'Cargando…' : `${data?.total ?? 0} estudios registrados`}
           </div>
         </div>
-        <button className="btn btn-primary" onClick={abrirSelector}>
+        <button className="btn btn-primary" onClick={abrirNuevoEstudio}>
           ＋ Nuevo estudio
         </button>
       </div>
@@ -226,62 +202,6 @@ export default function EstudiosPage() {
         </div>
       )}
 
-      {/* Modal selector de origen */}
-      {showSelector && (
-        <div className="modal-backdrop" onClick={() => setShowSelector(false)}>
-          <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="section-title" style={{ margin: 0 }}>¿Cómo vas a crear este estudio?</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowSelector(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div style={{ display: 'grid', gap: 14 }}>
-                <button
-                  type="button"
-                  className="card"
-                  style={{
-                    textAlign: 'left', padding: 18, border: '2px solid var(--border)',
-                    cursor: 'pointer', background: 'transparent',
-                  }}
-                  onClick={() => seleccionarModo('drive_existente')}
-                >
-                  <div style={{ fontSize: 28, marginBottom: 4 }}>📂</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
-                    Importar de Google Drive
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    El estudio ya existe — los archivos (actas, censos, ficha de pre-campo, etc.)
-                    están en una carpeta de Drive. La IA los procesará automáticamente.
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  className="card"
-                  style={{
-                    textAlign: 'left', padding: 18, border: '2px solid var(--border)',
-                    cursor: 'pointer', background: 'transparent',
-                  }}
-                  onClick={() => seleccionarModo('encuestas_nuevas')}
-                >
-                  <div style={{ fontSize: 28, marginBottom: 4 }}>✏</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
-                    Empezar desde cero
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    El estudio aún no ha comenzado — voy a llenar los formularios desde la plataforma
-                    (Ficha de Pre-campo, Acta de Inicio, Ficha de Comisión, etc.).
-                  </div>
-                </button>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setShowSelector(false)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modal nuevo estudio */}
       {showModal && (
         <div className="modal-backdrop" onClick={() => setShowModal(false)}>
@@ -362,7 +282,6 @@ export default function EstudiosPage() {
                   municipio: form.municipio,
                   departamento: form.departamento,
                   contrato_referencia: form.contrato_referencia || undefined,
-                  modo_creacion: modoCreacion,
                 })}
               >
                 {crear.isPending ? 'Creando…' : 'Crear estudio'}

@@ -11,8 +11,6 @@ STUDY_STATES = (
     "listo_revision", "en_revision", "aprobado", "exportado", "error"
 )
 
-STUDY_MODOS = ("drive_existente", "encuestas_nuevas")
-
 CORPUS_FILE_TYPES = ("pdf", "docx", "xlsx", "qgz", "gpkg", "shp", "jpg", "heic", "mp4", "mp3", "otro")
 
 CORPUS_ROLES = (
@@ -44,9 +42,6 @@ class Study(Base):
 
     estado: Mapped[str] = mapped_column(
         SAEnum(*STUDY_STATES, name="study_estado"), nullable=False, default="borrador"
-    )
-    modo_creacion: Mapped[str] = mapped_column(
-        SAEnum(*STUDY_MODOS, name="study_modo"), nullable=False, default="drive_existente"
     )
     error_msg: Mapped[str | None] = mapped_column(Text)
 
